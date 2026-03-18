@@ -26,8 +26,7 @@ in
       merged = "/mnt/user";
     };
     frp = {
-      enable = true;
-      tokenFile = config.age.secrets.frpToken.path;
+      enable = false;
     };
     samba = {
       enable = true;
