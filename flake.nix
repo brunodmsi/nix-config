@@ -46,7 +46,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     secrets = {
-      url = "github:brunodmsi/nix-secrets";
+      url = "git+ssh://git@github.com/brunodmsi/nix-secrets.git";
       flake = false;
     };
   };
