@@ -70,13 +70,12 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 
 Partition and mount the drives using [disko](https://github.com/nix-community/disko)
 
-```bash
-DISK='/dev/disk/by-id/ata-Samsung_SSD_870_EVO_250GB_S6PENL0T902873K'
-DISK2='/dev/disk/by-id/ata-Samsung_SSD_870_EVO_250GB_S6PE58S586SAER'
+Download the standalone disko config and substitute your disk IDs (find them with `ls /dev/disk/by-id/`):
 
-curl https://raw.githubusercontent.com/notthebee/nix-config/main/disko/zfs-root/default.nix \
-    -o /tmp/disko.nix
-sed -i "s|to-be-filled-during-installation|$DISK|" /tmp/disko.nix
+```bash
+curl -o /tmp/disko.nix https://raw.githubusercontent.com/brunodmsi/nix-config/main/disko/zfs-root/default.nix
+sed -i "s|DISK_MAIN|your-main-disk-id|" /tmp/disko.nix
+sed -i "s|DISK_MIRROR|your-mirror-disk-id|" /tmp/disko.nix
 nix --experimental-features "nix-command flakes" run github:nix-community/disko \
     -- -m destroy,format,mount /tmp/disko.nix
 ```
@@ -91,18 +90,18 @@ Clone this repository
 
 ```bash
 mkdir -p /mnt/etc/nixos
-git clone https://github.com/notthebee/nix-config.git /mnt/etc/nixos
+git clone https://github.com/brunodmsi/nix-config.git /mnt/etc/nixos
 ```
 
 Put the private key into place (required for secret management)
 
 ```bash
-mkdir -p /mnt/home/notthebee/.ssh
+mkdir -p /mnt/home/brunodemasi/.ssh
 exit
-scp ~/.ssh/notthebee root@$NIXOS_HOST:/mnt/home/notthebee/.ssh
+scp ~/.ssh/id_ed25519 root@$NIXOS_HOST:/mnt/home/brunodemasi/.ssh
 ssh root@$NIXOS_HOST
-chmod 700 /mnt/home/notthebee/.ssh
-chmod 600 /mnt/home/notthebee/.ssh/*
+chmod 700 /mnt/home/brunodemasi/.ssh
+chmod 600 /mnt/home/brunodemasi/.ssh/*
 ```
 
 Install the system
