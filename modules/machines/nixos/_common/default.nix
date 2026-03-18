@@ -7,21 +7,11 @@
 }:
 {
 
-  programs.ssh =
-    let
-      gitAddress = "git.notthebe.ee";
-    in
-    {
-      knownHosts = {
-        "[${gitAddress}]:69".publicKey =
-          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILWsWVmk8Zozdap4MlAe5rf7wfR3k3FaawnlUUclBENC";
-      };
+  programs.ssh = {
       extraConfig = ''
-        Host ${gitAddress}
+        Host github.com
           IdentityFile /persist/ssh/ssh_host_ed25519_key
           IdentitiesOnly yes
-          User forgejo
-          Port 69
       '';
     };
 
