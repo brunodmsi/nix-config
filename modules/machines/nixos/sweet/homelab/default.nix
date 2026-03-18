@@ -4,8 +4,6 @@
   ...
 }:
 let
-  wg = config.homelab.networks.local.wireguard-ext;
-  wgBase = lib.strings.removeSuffix ".1" wg.cidr.v4;
   hl = config.homelab;
 in
 {
@@ -160,10 +158,7 @@ in
       uptime-kuma.enable = true;
       deluge.enable = true;
       wireguard-netns = {
-        enable = true;
-        configFile = config.age.secrets.wireguardCredentials.path;
-        privateIP = "${wgBase}.2";
-        dnsIP = wg.cidr.v4;
+        enable = false;
       };
     };
   };
