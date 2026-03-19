@@ -16,7 +16,7 @@
   time.timeZone = "Europe/Berlin";
 
   users.users = {
-    notthebee = {
+    bmasi = {
       isNormalUser = true;
       initialPassword = "changeme";
       extraGroups = [ "wheel" ];
