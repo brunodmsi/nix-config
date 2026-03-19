@@ -103,10 +103,11 @@ in
             type = "zfs_fs";
             options.mountpoint = "none";
           };
-          "nixos/root" = {
+          "nixos/empty" = {
             type = "zfs_fs";
             options.mountpoint = "legacy";
             mountpoint = "/";
+            postCreateHook = "zfs snapshot rpool/nixos/empty@start";
           };
           "nixos/home" = {
             type = "zfs_fs";
