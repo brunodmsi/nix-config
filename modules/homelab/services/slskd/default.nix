@@ -128,9 +128,7 @@ in
           cfg.musicDir
         ];
         serviceConfig.ReadOnlyPaths = lib.mkForce [ ];
-        serviceConfig.NetworkNamespacePath = lib.attrsets.optionalAttrs hl.services.wireguard-netns.enable [
-          "/var/run/netns/${ns}"
-        ];
+        serviceConfig.NetworkNamespacePath = lib.mkIf hl.services.wireguard-netns.enable "/var/run/netns/${ns}";
       }
       // lib.attrsets.optionalAttrs hl.services.wireguard-netns.enable {
         bindsTo = [ "netns@${ns}.service" ];
