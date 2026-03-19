@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 {
@@ -29,4 +30,21 @@
       };
     };
   };
+
+  # Cloudflare Tunnel — token-based (remotely managed via dashboard)
+  systemd.services.cloudflared-tunnel = {
+    description = "Cloudflare Tunnel";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      ExecStart = pkgs.writeShellScript "cloudflared-run" ''
+        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token $(cat /persist/secrets/cloudflare-tunnel-token)
+      '';
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+  };
+
+  environment.systemPackages = [ pkgs.cloudflared ];
 }
