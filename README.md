@@ -6,6 +6,13 @@ Configuration files for my NixOS machine.
 
 Very much a work in progress.
 
+## Hardware
+
+- **CPU**: Intel
+- **RAM**: 32GB
+- **Boot**: Kingston SNV3S 500GB NVMe
+- **Storage**: 2x WD 12TB HDD (1 data + 1 parity)
+
 ## Services
 
 > This section is generated automatically from the Nix configuration using GitHub Actions and [this cursed Nix script](bin/generateServicesTable.nix)
@@ -42,27 +49,27 @@ Very much a work in progress.
 
 ### 1. Prepare the live environment
 
-Create a root password using the TTY
+Boot from NixOS USB installer, then create a root password:
 
 ```bash
 sudo su
 passwd
 ```
 
-From your host, copy the public SSH key to the server
+From your host, copy the public SSH key to the server:
 
 ```bash
 export NIXOS_HOST=192.168.2.xxx
 ssh-copy-id -i ~/.ssh/id_ed25519 root@$NIXOS_HOST
 ```
 
-SSH into the host
+SSH into the host:
 
 ```bash
 ssh root@$NIXOS_HOST
 ```
 
-Enable flakes
+Enable flakes:
 
 ```bash
 mkdir -p ~/.config/nix
@@ -71,45 +78,44 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 
 ### 2. Partition and mount drives
 
-Partition and mount the drives using [disko](https://github.com/nix-community/disko).
-
-Download the standalone disko config and substitute your disk IDs (find them with `ls /dev/disk/by-id/`):
-
-```bash
-curl -o /tmp/disko.nix https://raw.githubusercontent.com/brunodmsi/nix-config/main/disko/zfs-root/default.nix
-sed -i "s|DISK_MAIN|your-main-disk-id|" /tmp/disko.nix
-sed -i "s|DISK_MIRROR|your-mirror-disk-id|" /tmp/disko.nix
-nix --experimental-features "nix-command flakes" run github:nix-community/disko \
-    -- -m destroy,format,mount /tmp/disko.nix
-```
-
-### 3. Clone and install (minimal)
-
-The initial install uses a minimal config (no services) to fit within the live USB's tmpfs. Services are enabled after booting on real disk.
-
-If the live ISO tmpfs is too small, expand it first:
+Expand the live ISO tmpfs (required for large installs):
 
 ```bash
 mount -o remount,size=28G /
 ```
 
+Partition the boot NVMe using [disko](https://github.com/nix-community/disko).
+The disko config is hardcoded for the Kingston NVMe — if your disk is different,
+edit the file before running:
+
+```bash
+curl -o /tmp/disko.nix https://raw.githubusercontent.com/brunodmsi/nix-config/main/disko/zfs-root/default.nix
+nix --experimental-features "nix-command flakes" run github:nix-community/disko \
+    -- -m destroy,format,mount /tmp/disko.nix
+```
+
+Verify pools are online:
+
+```bash
+zpool status
+```
+
+### 3. Clone and install (minimal)
+
+The initial install uses a minimal config (no services, no secrets, no data drive mounts)
+because:
+
+- The live USB tmpfs can't hold all service packages
+- Agenix secrets are placeholders and can't decrypt
+- Data HDDs are not yet configured
+
+See [RESTORE.md](RESTORE.md) for full details on what's disabled and how to restore.
+
 Install git and clone:
 
 ```bash
 nix-env -f '<nixpkgs>' -iA git
-mkdir -p /mnt/etc/nixos
 git clone https://github.com/brunodmsi/nix-config.git /mnt/etc/nixos
-```
-
-Put the private key into place (required for secret management):
-
-```bash
-mkdir -p /mnt/home/brunodemasi/.ssh
-exit
-scp ~/.ssh/id_ed25519 root@$NIXOS_HOST:/mnt/home/brunodemasi/.ssh
-ssh root@$NIXOS_HOST
-chmod 700 /mnt/home/brunodemasi/.ssh
-chmod 600 /mnt/home/brunodemasi/.ssh/*
 ```
 
 Install the system:
@@ -121,7 +127,7 @@ nixos-install \
 --flake "git+file:///mnt/etc/nixos#sweet"
 ```
 
-Unmount and reboot:
+Unmount and reboot (remove USB drive):
 
 ```bash
 umount "/mnt/boot/efis/*"
@@ -130,14 +136,19 @@ zpool export -a
 reboot
 ```
 
-### 4. Enable services (after first boot)
+### 4. First boot
 
-After booting into the installed system, restore the full service configuration:
+Log in with:
+- **User**: `bmasi`
+- **Password**: `changeme` (change immediately with `passwd`)
+- **SSH**: port 22, password auth enabled
 
-```bash
-cd /etc/nixos/modules/machines/nixos/sweet/homelab
-cp full.nix default.nix
-cd /etc/nixos
-git add -A && git commit -m "Enable all services"
-nixos-rebuild switch --flake /etc/nixos#sweet
-```
+### 5. Post-install setup
+
+After booting on real disk, follow [RESTORE.md](RESTORE.md) to:
+
+1. **Set up Cloudflare** — Create API tokens for DNS and firewall management
+2. **Set up agenix secrets** — Generate host SSH key, encrypt real secrets
+3. **Set up data drives** — Format and mount the 2x 12TB HDDs
+4. **Restore full config** — Copy `.full.nix` files back and rebuild
+5. **Rename user references** — Update `notthebee` -> `bmasi` in full configs
