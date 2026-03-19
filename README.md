@@ -130,8 +130,7 @@ nixos-install \
 Unmount and reboot (remove USB drive):
 
 ```bash
-umount "/mnt/boot/efis/*"
-umount -Rl "/mnt"
+umount -Rl /mnt
 zpool export -a
 reboot
 ```
