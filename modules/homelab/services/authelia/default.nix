@@ -95,25 +95,22 @@ in
       };
     };
 
-    # Caddy virtual host for Authelia itself
-    services.caddy.virtualHosts."${autheliaUrl}" = {
-      useACMEHost = homelab.baseDomain;
-      extraConfig = ''
-        reverse_proxy http://127.0.0.1:9091
-      '';
-    };
-
-    # Add forward auth to protected services
-    services.caddy.virtualHosts = lib.mkMerge (
-      map (vhost: {
-        "${vhost}" = {
-          extraConfig = lib.mkBefore ''
-            forward_auth http://127.0.0.1:9091 {
-              uri /api/authz/forward-auth
-              copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-            }
-          '';
-        };
+    # Caddy virtual host for Authelia + forward auth on protected services
+    services.caddy.virtualHosts = {
+      "${autheliaUrl}" = {
+        useACMEHost = homelab.baseDomain;
+        extraConfig = ''
+          reverse_proxy http://127.0.0.1:9091
+        '';
+      };
+    } // lib.listToAttrs (
+      map (vhost: lib.nameValuePair vhost {
+        extraConfig = lib.mkBefore ''
+          forward_auth http://127.0.0.1:9091 {
+            uri /api/authz/forward-auth
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+          }
+        '';
       }) cfg.protectedServices
     );
   };
