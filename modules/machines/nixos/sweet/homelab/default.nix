@@ -39,7 +39,7 @@
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "cloudflared-run" ''
-        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate run --token $(cat /persist/secrets/cloudflare-tunnel-token)
+        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token $(cat /persist/secrets/cloudflare-tunnel-token)
       '';
       Restart = "on-failure";
       RestartSec = 5;
