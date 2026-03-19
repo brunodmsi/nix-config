@@ -47,7 +47,6 @@
       jellyseerr.enable = true;
       # Download clients (run in VPN namespace)
       deluge.enable = true;
-      sabnzbd.enable = true;
       # VPN namespace
       wireguard-netns = {
         enable = true;

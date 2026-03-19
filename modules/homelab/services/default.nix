@@ -109,7 +109,6 @@ in
     ./miniflux
     ./nextcloud
     ./paperless-ngx
-    ./sabnzbd
     ./slskd
     ./uptime-kuma
     ./vaultwarden
