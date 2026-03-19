@@ -54,7 +54,7 @@
       bootDevices = [
         "nvme-KINGSTON_SNV3S500G_50026B76878184EA"
       ];
-      immutable = true;
+      immutable = false;
       availableKernelModules = [
         "uhci_hcd"
         "ehci_pci"
