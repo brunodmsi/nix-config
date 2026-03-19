@@ -59,7 +59,7 @@ in
             # Parse wg-quick config
             CONFIG="${cfg.configFile}"
             PRIVATE_KEY=$(grep -oP 'PrivateKey\s*=\s*\K.*' "$CONFIG" | tr -d ' ')
-            ADDRESS=$(grep -oP 'Address\s*=\s*\K.*' "$CONFIG" | tr -d ' ')
+            ADDRESS_LINE=$(grep -oP 'Address\s*=\s*\K.*' "$CONFIG" | tr -d ' ')
             PEER_KEY=$(grep -oP 'PublicKey\s*=\s*\K.*' "$CONFIG" | tr -d ' ')
             ENDPOINT=$(grep -oP 'Endpoint\s*=\s*\K.*' "$CONFIG" | tr -d ' ')
             ALLOWED_IPS=$(grep -oP 'AllowedIPs\s*=\s*\K.*' "$CONFIG" | tr -d ' ')
@@ -76,8 +76,12 @@ in
                 endpoint "$ENDPOINT" \
                 allowed-ips "$ALLOWED_IPS"
 
-            # Set address and bring up
-            ${iproute2}/bin/ip -n ${cfg.namespace} address add "$ADDRESS" dev wg0
+            # Set addresses (handle comma-separated IPv4,IPv6)
+            IFS=',' read -ra ADDRS <<< "$ADDRESS_LINE"
+            for addr in "''${ADDRS[@]}"; do
+              ${iproute2}/bin/ip -n ${cfg.namespace} address add "$addr" dev wg0
+            done
+
             ${iproute2}/bin/ip -n ${cfg.namespace} link set wg0 up
             ${iproute2}/bin/ip -n ${cfg.namespace} link set lo up
             ${iproute2}/bin/ip -n ${cfg.namespace} route add default dev wg0
