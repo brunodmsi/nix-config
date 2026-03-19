@@ -40,6 +40,8 @@ Very much a work in progress.
 
 ## Installation runbook (NixOS)
 
+### 1. Prepare the live environment
+
 Create a root password using the TTY
 
 ```bash
@@ -51,14 +53,13 @@ From your host, copy the public SSH key to the server
 
 ```bash
 export NIXOS_HOST=192.168.2.xxx
-ssh-add ~/.ssh/notthebee
-ssh-copy-id -i ~/.ssh/notthebee root@$NIXOS_HOST
+ssh-copy-id -i ~/.ssh/id_ed25519 root@$NIXOS_HOST
 ```
 
-SSH into the host with agent forwarding enabled (for the secrets repo access)
+SSH into the host
 
 ```bash
-ssh -A root@$NIXOS_HOST
+ssh root@$NIXOS_HOST
 ```
 
 Enable flakes
@@ -68,7 +69,9 @@ mkdir -p ~/.config/nix
 echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 ```
 
-Partition and mount the drives using [disko](https://github.com/nix-community/disko)
+### 2. Partition and mount drives
+
+Partition and mount the drives using [disko](https://github.com/nix-community/disko).
 
 Download the standalone disko config and substitute your disk IDs (find them with `ls /dev/disk/by-id/`):
 
@@ -80,20 +83,25 @@ nix --experimental-features "nix-command flakes" run github:nix-community/disko 
     -- -m destroy,format,mount /tmp/disko.nix
 ```
 
-Install git
+### 3. Clone and install (minimal)
+
+The initial install uses a minimal config (no services) to fit within the live USB's tmpfs. Services are enabled after booting on real disk.
+
+If the live ISO tmpfs is too small, expand it first:
+
+```bash
+mount -o remount,size=28G /
+```
+
+Install git and clone:
 
 ```bash
 nix-env -f '<nixpkgs>' -iA git
-```
-
-Clone this repository
-
-```bash
 mkdir -p /mnt/etc/nixos
 git clone https://github.com/brunodmsi/nix-config.git /mnt/etc/nixos
 ```
 
-Put the private key into place (required for secret management)
+Put the private key into place (required for secret management):
 
 ```bash
 mkdir -p /mnt/home/brunodemasi/.ssh
@@ -104,7 +112,7 @@ chmod 700 /mnt/home/brunodemasi/.ssh
 chmod 600 /mnt/home/brunodemasi/.ssh/*
 ```
 
-Install the system
+Install the system:
 
 ```bash
 nixos-install \
@@ -113,16 +121,23 @@ nixos-install \
 --flake "git+file:///mnt/etc/nixos#sweet"
 ```
 
-Unmount the filesystems
+Unmount and reboot:
 
 ```bash
 umount "/mnt/boot/efis/*"
 umount -Rl "/mnt"
 zpool export -a
+reboot
 ```
 
-Reboot
+### 4. Enable services (after first boot)
+
+After booting into the installed system, restore the full service configuration:
 
 ```bash
-reboot
+cd /etc/nixos/modules/machines/nixos/sweet/homelab
+cp full.nix default.nix
+cd /etc/nixos
+git add -A && git commit -m "Enable all services"
+nixos-rebuild switch --flake /etc/nixos#sweet
 ```
