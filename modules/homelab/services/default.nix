@@ -67,7 +67,7 @@ in
     };
     security.acme = {
       acceptTerms = true;
-      defaults.email = "brunodmsi@gmail.com";
+      defaults.email = "brunodemasi1@gmail.com";
       defaults.server = "https://acme-v02.api.letsencrypt.org/directory";
       certs.${config.homelab.baseDomain} = {
         reloadServices = [ "caddy.service" ];
