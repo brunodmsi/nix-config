@@ -71,5 +71,14 @@
     };
   };
 
+  # Ensure media directories exist with correct ownership
+  systemd.tmpfiles.rules = [
+    "d /mnt/data1/Downloads 0775 share share - -"
+    "d /mnt/data1/Media 0775 share share - -"
+    "d /mnt/data1/Media/TV 0775 share share - -"
+    "d /mnt/data1/Media/Movies 0775 share share - -"
+    "d /mnt/data1/Media/Music 0775 share share - -"
+  ];
+
   environment.systemPackages = [ pkgs.cloudflared ];
 }
