@@ -127,23 +127,13 @@ in
     ./arr/radarr
     #./arr/lidarr
     ./deluge
-    #./deemix
-    ./forgejo
-    ./forgejo-runner
     ./homepage
     ./immich
     ./jellyfin
     ./keycloak
-    ./matrix
-    ./plausible
     ./microbin
     ./miniflux
-    ./monitoring/grafana
-    ./monitoring/prometheus
-    ./monitoring/prometheus/exporters/shelly_plug_exporter
     ./nextcloud
-    ./smarthome/homeassistant
-    ./smarthome/raspberrymatic
     ./paperless-ngx
     ./sabnzbd
     ./slskd

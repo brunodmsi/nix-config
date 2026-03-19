@@ -25,16 +25,8 @@
       url = "git+https://git.notthebe.ee/notthebee/AutoASPM";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    fmatrix = {
-      url = "github:zerw0/fmatrix/dd859e33117f78e4042204022d57bd671111d852";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     agenix = {
       url = "github:ryantm/agenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    adios-bot = {
-      url = "git+https://git.notthebe.ee/notthebee/adiosbot";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-index-database = {

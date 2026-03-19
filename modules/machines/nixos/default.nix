@@ -32,8 +32,6 @@ in
               ../../misc/withings2intervals
               self.inputs.agenix.nixosModules.default
               self.inputs.autoaspm.nixosModules.default
-              self.inputs.fmatrix.nixosModules.default
-              self.inputs.adios-bot.nixosModules.default
               (./. + "/_common/default.nix")
               (./. + "/${name}/configuration.nix")
             ];
