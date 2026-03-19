@@ -1,3 +1,5 @@
+# Minimal config for initial install. Enable services after booting on real disk.
+# See homelab/full.nix for the complete service configuration.
 {
   config,
   lib,
@@ -7,11 +9,6 @@ let
   hl = config.homelab;
 in
 {
-  services.fail2ban-cloudflare = {
-    enable = true;
-    apiKeyFile = config.age.secrets.cloudflareFirewallApiKey.path;
-    zoneId = "5a125e72bca5869bfb929db157d89d96";
-  };
   homelab = {
     enable = true;
     baseDomain = "goose.party";
@@ -23,114 +20,10 @@ in
       fast = "/mnt/cache";
       merged = "/mnt/user";
     };
-    frp = {
-      enable = false;
-    };
-    samba = {
-      enable = true;
-      passwordFile = config.age.secrets.sambaPassword.path;
-      shares = {
-        Backups = {
-          path = "${hl.mounts.merged}/Backups";
-        };
-        Documents = {
-          path = "${hl.mounts.fast}/Documents";
-        };
-        Media = {
-          path = "${hl.mounts.merged}/Media";
-        };
-        Music = {
-          path = "${hl.mounts.fast}/Media/Music";
-        };
-        Misc = {
-          path = "${hl.mounts.merged}/Misc";
-        };
-        TimeMachine = {
-          path = "${hl.mounts.fast}/TimeMachine";
-          "fruit:time machine" = "yes";
-        };
-        YoutubeArchive = {
-          path = "${hl.mounts.merged}/YoutubeArchive";
-        };
-        YoutubeCurrent = {
-          path = "${hl.mounts.fast}/YoutubeCurrent";
-        };
-      };
-    };
+    frp.enable = false;
+    samba.enable = false;
     services = {
-      enable = true;
-      slskd = {
-        enable = true;
-        environmentFile = config.age.secrets.slskdEnvironmentFile.path;
-      };
-      backup = {
-        enable = true;
-        passwordFile = config.age.secrets.resticPassword.path;
-        s3.enable = true;
-        s3.url = "https://s3.eu-central-003.backblazeb2.com/notthebee-ojfca-backups";
-        s3.environmentFile = config.age.secrets.resticBackblazeEnv.path;
-        local.enable = true;
-      };
-      keycloak = {
-        enable = true;
-        dbPasswordFile = config.age.secrets.keycloakDbPasswordFile.path;
-        oauth2ProxyEnvFile = config.age.secrets.oauth2ProxyEnvFile.path;
-      };
-      radicale = {
-        enable = true;
-        passwordFile = config.age.secrets.radicaleHtpasswd.path;
-      };
-      immich = {
-        enable = true;
-        mediaDir = "${hl.mounts.fast}/Media/Photos";
-      };
-      invoiceplane = {
-        enable = true;
-      };
-      homepage = {
-        enable = true;
-        misc = [ ];
-      };
-      jellyfin.enable = true;
-      paperless = {
-        enable = true;
-        passwordFile = config.age.secrets.paperlessPassword.path;
-      };
-      sabnzbd.enable = true;
-      sonarr.enable = true;
-      radarr.enable = true;
-      bazarr.enable = true;
-      prowlarr.enable = true;
-      jellyseerr = {
-        enable = true;
-      };
-      nextcloud = {
-        enable = true;
-        admin = {
-          username = "notthebee";
-          passwordFile = config.age.secrets.nextcloudAdminPassword.path;
-        };
-      };
-      vaultwarden = {
-        enable = true;
-      };
-      microbin = {
-        enable = true;
-      };
-      miniflux = {
-        enable = true;
-        adminCredentialsFile = config.age.secrets.minifluxAdminPassword.path;
-      };
-      navidrome = {
-        enable = true;
-        environmentFile = config.age.secrets.navidromeEnv.path;
-      };
-      audiobookshelf.enable = true;
-      uptime-kuma.enable = true;
-      deluge.enable = true;
-      wireguard-netns = {
-        enable = false;
-      };
+      enable = false;
     };
   };
 }
