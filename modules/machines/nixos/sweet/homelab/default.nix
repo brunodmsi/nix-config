@@ -71,14 +71,47 @@
     };
   };
 
-  # Ensure media directories exist with correct ownership
+  # Ensure media and backup directories exist with correct ownership
   systemd.tmpfiles.rules = [
     "d /mnt/data1/Downloads 0775 share share - -"
     "d /mnt/data1/Media 0775 share share - -"
     "d /mnt/data1/Media/TV 0775 share share - -"
     "d /mnt/data1/Media/Movies 0775 share share - -"
     "d /mnt/data1/Media/Music 0775 share share - -"
+    "d /mnt/data1/Backups 0700 root root - -"
+    "d /mnt/data1/Backups/var-lib 0700 root root - -"
+    "d /mnt/data1/Backups/persist 0700 root root - -"
   ];
+
+  # Daily backup of critical data to data drive
+  systemd.services.backup-to-hdd = {
+    description = "Backup critical data to HDD";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "backup-to-hdd" ''
+        ${pkgs.rsync}/bin/rsync -a --delete /persist/ /mnt/data1/Backups/persist/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/authelia-main/ /mnt/data1/Backups/var-lib/authelia-main/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/jellyfin/ /mnt/data1/Backups/var-lib/jellyfin/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/sonarr/ /mnt/data1/Backups/var-lib/sonarr/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/radarr/ /mnt/data1/Backups/var-lib/radarr/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/bazarr/ /mnt/data1/Backups/var-lib/bazarr/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/prowlarr/ /mnt/data1/Backups/var-lib/prowlarr/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/deluge/ /mnt/data1/Backups/var-lib/deluge/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/uptime-kuma/ /mnt/data1/Backups/var-lib/uptime-kuma/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/homepage-dashboard/ /mnt/data1/Backups/var-lib/homepage-dashboard/
+      '';
+    };
+  };
+
+  systemd.timers.backup-to-hdd = {
+    description = "Daily backup of critical data to HDD";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "daily";
+      Persistent = true;
+      RandomizedDelaySec = "1h";
+    };
+  };
 
   environment.systemPackages = [ pkgs.cloudflared ];
 }
