@@ -42,7 +42,12 @@
     };
   };
 
-  # Cloudflare Tunnel — token-based (remotely managed via dashboard)
+  # Cloudflare Tunnel — token-based with local config override for TLS
+  environment.etc."cloudflared/config.yml".text = ''
+    originRequest:
+      noTLSVerify: true
+  '';
+
   systemd.services.cloudflared-tunnel = {
     description = "Cloudflare Tunnel";
     after = [ "network-online.target" ];
@@ -50,7 +55,7 @@
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "cloudflared-run" ''
-        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token $(cat ${config.age.secrets.cloudflareTunnelToken.path})
+        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 --config /etc/cloudflared/config.yml run --token $(cat ${config.age.secrets.cloudflareTunnelToken.path})
       '';
       Restart = "on-failure";
       RestartSec = 5;
