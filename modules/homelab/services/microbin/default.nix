@@ -127,7 +127,7 @@ in
       })
       # server
       {
-        services.caddy.virtualHosts."${cfg.url}" = {
+        services.caddy.virtualHosts."http://${cfg.url}" = {
           useACMEHost = "demasi.dev";
           extraConfig = ''
             handle {

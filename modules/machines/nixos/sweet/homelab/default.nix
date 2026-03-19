@@ -35,19 +35,14 @@
         storageEncryptionKeyFile = config.age.secrets.autheliaStorageEncryptionKey.path;
         usersFile = config.age.secrets.autheliaUsersFile.path;
         protectedServices = [
-          "homepage.demasi.dev"
-          "uptime.demasi.dev"
+          "http://homepage.demasi.dev"
+          "http://uptime.demasi.dev"
         ];
       };
     };
   };
 
-  # Cloudflare Tunnel — token-based with local config override for TLS
-  environment.etc."cloudflared/config.yml".text = ''
-    originRequest:
-      noTLSVerify: true
-  '';
-
+  # Cloudflare Tunnel — token-based, routes managed in dashboard
   systemd.services.cloudflared-tunnel = {
     description = "Cloudflare Tunnel";
     after = [ "network-online.target" ];
@@ -55,7 +50,7 @@
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "cloudflared-run" ''
-        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 --config /etc/cloudflared/config.yml run --token $(cat ${config.age.secrets.cloudflareTunnelToken.path})
+        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token $(cat ${config.age.secrets.cloudflareTunnelToken.path})
       '';
       Restart = "on-failure";
       RestartSec = 5;

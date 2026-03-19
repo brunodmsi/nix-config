@@ -97,8 +97,7 @@ in
     # Caddy: Authelia vhost + forward auth on protected services
     services.caddy.virtualHosts = lib.mkMerge ([
       {
-        "${autheliaUrl}" = {
-          useACMEHost = homelab.baseDomain;
+        "http://${autheliaUrl}" = {
           extraConfig = ''
             reverse_proxy http://127.0.0.1:9091
           '';

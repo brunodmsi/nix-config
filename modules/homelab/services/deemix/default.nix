@@ -47,7 +47,7 @@ in
       musicDir = cfg.musicDir;
       listenHost = "127.0.0.1";
     };
-    services.caddy.virtualHosts."${cfg.url}" = {
+    services.caddy.virtualHosts."http://${cfg.url}" = {
       useACMEHost = hl.baseDomain;
       extraConfig = ''
         reverse_proxy http://${config.services.${service}.listenHost}:${

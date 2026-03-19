@@ -65,25 +65,10 @@ in
           }
           // common;
     };
-    security.acme = {
-      acceptTerms = true;
-      defaults.email = "brunodemasi1@gmail.com";
-      defaults.server = "https://acme-v02.api.letsencrypt.org/directory";
-      certs.${config.homelab.baseDomain} = {
-        reloadServices = [ "caddy.service" ];
-        domain = "${config.homelab.baseDomain}";
-        extraDomainNames = [ "*.${config.homelab.baseDomain}" ];
-        dnsProvider = "cloudflare";
-        dnsResolver = "1.1.1.1:53";
-        dnsPropagationCheck = true;
-        group = config.services.caddy.group;
-        environmentFile = config.homelab.cloudflare.dnsCredentialsFile;
-      };
-    };
     services.caddy = {
       enable = true;
       globalConfig = ''
-        auto_https disable_redirects
+        auto_https off
       '';
     };
     nixpkgs.config.permittedInsecurePackages = [

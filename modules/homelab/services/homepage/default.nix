@@ -195,8 +195,8 @@ in
           }
         ];
     };
-    services.caddy.virtualHosts."homepage.${homelab.baseDomain}" = {
-      useACMEHost = homelab.baseDomain;
+    services.caddy.virtualHosts."http://homepage.${homelab.baseDomain}" = {
+      
       extraConfig = ''
         reverse_proxy http://127.0.0.1:${toString config.services.${service}.listenPort}
       '';

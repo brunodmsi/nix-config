@@ -68,8 +68,8 @@ in
       port = 2283;
       mediaLocation = "${cfg.mediaDir}";
     };
-    services.caddy.virtualHosts."${cfg.url}" = {
-      useACMEHost = homelab.baseDomain;
+    services.caddy.virtualHosts."http://${cfg.url}" = {
+      
       extraConfig = ''
         reverse_proxy http://${config.services.immich.host}:${toString config.services.immich.port}
       '';
