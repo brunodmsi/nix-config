@@ -75,15 +75,10 @@ in
         dbPasswordFile = config.age.secrets.keycloakDbPasswordFile.path;
         oauth2ProxyEnvFile = config.age.secrets.oauth2ProxyEnvFile.path;
       };
-      radicale = {
-        enable = true;
-        passwordFile = config.age.secrets.radicaleHtpasswd.path;
-      };
       immich = {
         enable = true;
         mediaDir = "${hl.mounts.fast}/Media/Photos";
       };
-      invoiceplane.enable = true;
       homepage = {
         enable = true;
         misc = [ ];
@@ -112,11 +107,6 @@ in
         enable = true;
         adminCredentialsFile = config.age.secrets.minifluxAdminPassword.path;
       };
-      navidrome = {
-        enable = true;
-        environmentFile = config.age.secrets.navidromeEnv.path;
-      };
-      audiobookshelf.enable = true;
       uptime-kuma.enable = true;
       deluge.enable = true;
       wireguard-netns.enable = false;

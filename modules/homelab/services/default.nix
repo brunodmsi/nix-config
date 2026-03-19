@@ -126,14 +126,12 @@ in
     ./arr/sonarr
     ./arr/radarr
     #./arr/lidarr
-    ./audiobookshelf
     ./deluge
     #./deemix
     ./forgejo
     ./forgejo-runner
     ./homepage
     ./immich
-    ./invoiceplane
     ./jellyfin
     ./keycloak
     ./matrix
@@ -143,12 +141,10 @@ in
     ./monitoring/grafana
     ./monitoring/prometheus
     ./monitoring/prometheus/exporters/shelly_plug_exporter
-    ./navidrome
     ./nextcloud
     ./smarthome/homeassistant
     ./smarthome/raspberrymatic
     ./paperless-ngx
-    ./radicale
     ./sabnzbd
     ./slskd
     ./uptime-kuma
