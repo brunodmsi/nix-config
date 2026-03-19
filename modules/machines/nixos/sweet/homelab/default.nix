@@ -9,7 +9,7 @@
   homelab = {
     enable = true;
     baseDomain = "s.demasi.dev";
-    cloudflare.dnsCredentialsFile = "/dev/null"; # placeholder until agenix is set up
+    cloudflare.dnsCredentialsFile = "/persist/secrets/cloudflare-dns";
     timeZone = "Europe/Berlin";
     mounts = {
       config = "/persist/opt/services";
