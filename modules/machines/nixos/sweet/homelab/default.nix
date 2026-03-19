@@ -35,7 +35,6 @@
         storageEncryptionKeyFile = config.age.secrets.autheliaStorageEncryptionKey.path;
         usersFile = config.age.secrets.autheliaUsersFile.path;
         protectedServices = [
-          "demasi.dev"
           "homepage.demasi.dev"
           "uptime.demasi.dev"
         ];
