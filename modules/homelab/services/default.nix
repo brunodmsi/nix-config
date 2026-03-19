@@ -82,21 +82,8 @@ in
     services.caddy = {
       enable = true;
       globalConfig = ''
-        auto_https off
+        auto_https disable_redirects
       '';
-      virtualHosts = {
-        "http://${config.homelab.baseDomain}" = {
-          extraConfig = ''
-            redir https://{host}{uri}
-          '';
-        };
-        "http://*.${config.homelab.baseDomain}" = {
-          extraConfig = ''
-            redir https://{host}{uri}
-          '';
-        };
-
-      };
     };
     nixpkgs.config.permittedInsecurePackages = [
       "dotnet-sdk-6.0.428"
