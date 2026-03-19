@@ -1,4 +1,4 @@
-# Minimal config for initial install. Enable services after booting on real disk.
+# Service configuration - enabling incrementally.
 # See homelab/full.nix for the complete service configuration.
 {
   config,
@@ -20,7 +20,13 @@
     frp.enable = false;
     samba.enable = false;
     services = {
-      enable = false;
+      enable = true;
+      uptime-kuma.enable = true;
+      jellyfin.enable = true;
+      homepage = {
+        enable = true;
+        misc = [ ];
+      };
     };
   };
 }
