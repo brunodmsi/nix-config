@@ -15,7 +15,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "login.s.demasi.dev";
+      default = "login.demasi.dev";
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -139,7 +139,7 @@ in
       # server
       {
         services.caddy.virtualHosts."${cfg.url}" = {
-          useACMEHost = "s.demasi.dev";
+          useACMEHost = "demasi.dev";
           extraConfig = ''
             reverse_proxy http://127.0.0.1:8821
             handle /oauth2/* {

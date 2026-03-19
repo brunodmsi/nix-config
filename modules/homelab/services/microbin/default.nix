@@ -29,7 +29,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "bin.s.demasi.dev";
+      default = "bin.demasi.dev";
     };
     passwordFile = lib.mkOption {
       default = "";
@@ -128,15 +128,15 @@ in
       # server
       {
         services.caddy.virtualHosts."${cfg.url}" = {
-          useACMEHost = "s.demasi.dev";
+          useACMEHost = "demasi.dev";
           extraConfig = ''
             handle {
               forward_auth 127.0.0.1:4192 {
-                uri https://login.s.demasi.dev/oauth2/auth
+                uri https://login.demasi.dev/oauth2/auth
                 header_up X-Real-IP {remote_host}
                 @error status 401
                 handle_response @error {
-                  redir * https://login.s.demasi.dev/oauth2/start?rd={scheme}://{host}{uri}
+                  redir * https://login.demasi.dev/oauth2/start?rd={scheme}://{host}{uri}
                 }
               }
               reverse_proxy http://${addr}:${toString port}

@@ -14,7 +14,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "pass.s.demasi.dev";
+      default = "pass.demasi.dev";
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -55,7 +55,7 @@ in
         };
       };
       caddy.virtualHosts."${cfg.url}" = {
-        useACMEHost = "s.demasi.dev";
+        useACMEHost = "demasi.dev";
         extraConfig = ''
           reverse_proxy http://${config.services.${service}.config.ROCKET_ADDRESS}:${
             toString config.services.${service}.config.ROCKET_PORT

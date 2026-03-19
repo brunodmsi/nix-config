@@ -9,7 +9,7 @@
 {
   homelab = {
     enable = true;
-    baseDomain = "s.demasi.dev";
+    baseDomain = "demasi.dev";
     cloudflare.dnsCredentialsFile = "/persist/secrets/cloudflare-dns";
     timeZone = "Europe/Berlin";
     mounts = {

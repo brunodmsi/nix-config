@@ -19,7 +19,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "news.s.demasi.dev";
+      default = "news.demasi.dev";
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -89,7 +89,7 @@ in
       })
       {
         services.caddy.virtualHosts."${cfg.url}" = {
-          useACMEHost = "s.demasi.dev";
+          useACMEHost = "demasi.dev";
           extraConfig = ''
             reverse_proxy http://${addr}:${toString port}
           '';
