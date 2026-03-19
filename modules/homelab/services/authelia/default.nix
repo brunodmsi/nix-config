@@ -56,7 +56,6 @@ in
 
         session = {
           name = "authelia_session";
-          domain = homelab.baseDomain;
           expiration = "12h";
           inactivity = "45m";
           remember_me = "1M";
