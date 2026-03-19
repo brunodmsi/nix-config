@@ -1,21 +1,17 @@
-# Standalone disko config for initial disk partitioning.
-# Replace DISK_MAIN and DISK_MIRROR with your actual disk IDs from `ls /dev/disk/by-id/`
-# Then run:
+# Standalone disko config for initial disk partitioning (single boot drive).
+# Run:
 #   curl -o /tmp/disko.nix https://raw.githubusercontent.com/brunodmsi/nix-config/main/disko/zfs-root/default.nix
-#   sed -i "s|DISK_MAIN|your-disk-id-here|" /tmp/disko.nix
-#   sed -i "s|DISK_MIRROR|your-mirror-disk-id-here|" /tmp/disko.nix
 #   nix --experimental-features "nix-command flakes" run github:nix-community/disko -- -m destroy,format,mount /tmp/disko.nix
 { ... }:
 let
-  diskMain = "DISK_MAIN";
-  diskMirror = "DISK_MIRROR";
+  disk = "nvme-KINGSTON_SNV3S500G_50026B76878184EA";
 in
 {
   disko.devices = {
     disk = {
       main = {
         type = "disk";
-        device = "/dev/disk/by-id/${diskMain}";
+        device = "/dev/disk/by-id/${disk}";
         content = {
           type = "gpt";
           partitions = {
@@ -25,43 +21,7 @@ in
               content = {
                 type = "filesystem";
                 format = "vfat";
-                mountpoint = "/boot/efis/${diskMain}-part2";
-              };
-            };
-            bpool = {
-              size = "4G";
-              content = {
-                type = "zfs";
-                pool = "bpool";
-              };
-            };
-            rpool = {
-              end = "-1M";
-              content = {
-                type = "zfs";
-                pool = "rpool";
-              };
-            };
-            bios = {
-              size = "100%";
-              type = "EF02";
-            };
-          };
-        };
-      };
-      mirror = {
-        type = "disk";
-        device = "/dev/disk/by-id/${diskMirror}";
-        content = {
-          type = "gpt";
-          partitions = {
-            efi = {
-              size = "1G";
-              type = "EF00";
-              content = {
-                type = "filesystem";
-                format = "vfat";
-                mountpoint = "/boot/efis/${diskMirror}-part2";
+                mountpoint = "/boot/efis/${disk}-part2";
               };
             };
             bpool = {
@@ -89,7 +49,6 @@ in
     zpool = {
       bpool = {
         type = "zpool";
-        mode = "mirror";
         options = {
           ashift = "12";
           autotrim = "on";
@@ -120,7 +79,6 @@ in
       };
       rpool = {
         type = "zpool";
-        mode = "mirror";
         options = {
           ashift = "12";
           autotrim = "on";
