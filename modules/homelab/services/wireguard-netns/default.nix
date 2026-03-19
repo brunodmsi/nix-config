@@ -40,7 +40,10 @@ in
         ExecStop = "${pkgs.iproute2}/bin/ip netns del %I";
       };
     };
-    environment.etc."netns/${cfg.namespace}/resolv.conf".text = "nameserver 10.64.0.1";
+    environment.etc."netns/${cfg.namespace}/resolv.conf".text = ''
+      nameserver 1.1.1.1
+      nameserver 9.9.9.9
+    '';
 
     systemd.services.${cfg.namespace} = {
       description = "${cfg.namespace} network interface";
