@@ -109,6 +109,7 @@ in
             forward_auth http://127.0.0.1:9091 {
               uri /api/authz/forward-auth
               copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+              header_up X-Forwarded-Proto "https"
             }
           '';
         };
