@@ -10,7 +10,7 @@
   homelab = {
     enable = true;
     baseDomain = "demasi.dev";
-    cloudflare.dnsCredentialsFile = "/persist/secrets/cloudflare-dns";
+    cloudflare.dnsCredentialsFile = config.age.secrets.cloudflareDnsApiCredentials.path;
     timeZone = "Europe/Berlin";
     mounts = {
       config = "/persist/opt/services";
@@ -39,7 +39,7 @@
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "cloudflared-run" ''
-        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token $(cat /persist/secrets/cloudflare-tunnel-token)
+        exec ${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token $(cat ${config.age.secrets.cloudflareTunnelToken.path})
       '';
       Restart = "on-failure";
       RestartSec = 5;

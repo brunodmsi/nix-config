@@ -3,6 +3,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 {
@@ -71,6 +72,14 @@
     ./filesystems
     ./homelab
   ];
+
+  age = {
+    identityPaths = [ "/persist/ssh/ssh_host_ed25519_key" ];
+    secrets = {
+      cloudflareDnsApiCredentials.file = "${inputs.secrets}/cloudflareDnsApiCredentials.age";
+      cloudflareTunnelToken.file = "${inputs.secrets}/cloudflareTunnelToken.age";
+    };
+  };
 
   virtualisation.docker.storageDriver = "overlay2";
 
