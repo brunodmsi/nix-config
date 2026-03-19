@@ -37,6 +37,7 @@
         protectedServices = [
           "http://homepage.demasi.dev"
           "http://uptime.demasi.dev"
+          "http://deluge.demasi.dev"
         ];
       };
       # Arr stack
