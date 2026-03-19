@@ -5,14 +5,11 @@
   lib,
   ...
 }:
-let
-  hl = config.homelab;
-in
 {
   homelab = {
     enable = true;
     baseDomain = "goose.party";
-    cloudflare.dnsCredentialsFile = config.age.secrets.cloudflareDnsApiCredentials.path;
+    cloudflare.dnsCredentialsFile = "/dev/null"; # placeholder until agenix is set up
     timeZone = "Europe/Berlin";
     mounts = {
       config = "/persist/opt/services";
