@@ -15,7 +15,7 @@ in
   };
   homelab = {
     enable = true;
-    baseDomain = "goose.party";
+    baseDomain = "s.demasi.dev";
     cloudflare.dnsCredentialsFile = config.age.secrets.cloudflareDnsApiCredentials.path;
     timeZone = "Europe/Berlin";
     mounts = {

@@ -8,7 +8,7 @@
 {
   homelab = {
     enable = true;
-    baseDomain = "goose.party";
+    baseDomain = "s.demasi.dev";
     cloudflare.dnsCredentialsFile = "/dev/null"; # placeholder until agenix is set up
     timeZone = "Europe/Berlin";
     mounts = {

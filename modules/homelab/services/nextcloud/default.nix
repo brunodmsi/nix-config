@@ -24,7 +24,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "cloud.goose.party";
+      default = "cloud.s.demasi.dev";
     };
     monitoredServices = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -141,7 +141,7 @@ in
       # server
       {
         services.caddy.virtualHosts."${cfg.url}" = {
-          useACMEHost = "goose.party";
+          useACMEHost = "s.demasi.dev";
           extraConfig = ''
             reverse_proxy http://127.0.0.1:8009
           '';

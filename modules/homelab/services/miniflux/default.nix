@@ -19,7 +19,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "news.goose.party";
+      default = "news.s.demasi.dev";
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -89,7 +89,7 @@ in
       })
       {
         services.caddy.virtualHosts."${cfg.url}" = {
-          useACMEHost = "goose.party";
+          useACMEHost = "s.demasi.dev";
           extraConfig = ''
             reverse_proxy http://${addr}:${toString port}
           '';

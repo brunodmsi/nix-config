@@ -15,7 +15,7 @@ in
     };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "login.goose.party";
+      default = "login.s.demasi.dev";
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -139,7 +139,7 @@ in
       # server
       {
         services.caddy.virtualHosts."${cfg.url}" = {
-          useACMEHost = "goose.party";
+          useACMEHost = "s.demasi.dev";
           extraConfig = ''
             reverse_proxy http://127.0.0.1:8821
             handle /oauth2/* {
