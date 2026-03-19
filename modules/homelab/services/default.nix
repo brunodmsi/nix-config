@@ -120,6 +120,7 @@ in
   };
 
   imports = [
+    ./authelia
     ./arr/prowlarr
     ./arr/bazarr
     ./arr/jellyseerr

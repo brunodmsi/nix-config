@@ -78,6 +78,13 @@
     secrets = {
       cloudflareDnsApiCredentials.file = "${inputs.secrets}/cloudflareDnsApiCredentials.age";
       cloudflareTunnelToken.file = "${inputs.secrets}/cloudflareTunnelToken.age";
+      autheliaJwtSecret.file = "${inputs.secrets}/autheliaJwtSecret.age";
+      autheliaSessionSecret.file = "${inputs.secrets}/autheliaSessionSecret.age";
+      autheliaStorageEncryptionKey.file = "${inputs.secrets}/autheliaStorageEncryptionKey.age";
+      autheliaUsersFile = {
+        file = "${inputs.secrets}/autheliaUsersFile.age";
+        owner = "authelia-main";
+      };
     };
   };
 

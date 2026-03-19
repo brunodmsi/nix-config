@@ -28,6 +28,17 @@
         enable = true;
         misc = [ ];
       };
+      authelia = {
+        enable = true;
+        jwtSecretFile = config.age.secrets.autheliaJwtSecret.path;
+        sessionSecretFile = config.age.secrets.autheliaSessionSecret.path;
+        storageEncryptionKeyFile = config.age.secrets.autheliaStorageEncryptionKey.path;
+        usersFile = config.age.secrets.autheliaUsersFile.path;
+        protectedServices = [
+          "homepage.demasi.dev"
+          "uptime.demasi.dev"
+        ];
+      };
     };
   };
 
