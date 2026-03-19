@@ -94,7 +94,7 @@ in
           runner.capacity = 2;
         };
         labels = [
-          "nix:docker://git.notthebe.ee/notthebee/nix-ci-builder:latest"
+          "nix:docker://git.notthebe.ee/bmasi/nix-ci-builder:latest"
           "debian-latest:docker://node:current-trixie"
           "buildah:docker://quay.io/containers/buildah:latest"
         ];

@@ -15,7 +15,7 @@ Removed from module list (full version in `default.full.nix`):
 
 - `self.inputs.agenix.nixosModules.default` — Agenix secret decryption (all secrets are placeholders)
 - `self.inputs.home-manager.nixosModules.home-manager` — Home Manager + dotfiles (needs `gitIncludes`, `bwSession` secrets)
-- `../../users/notthebee` — User config with agenix age.nix (needs secrets)
+- `../../users/bmasi` — User config with agenix age.nix (needs secrets)
 - `homeManagerCfg` — Home Manager wrapper config
 
 Kept (these just define options, no secret deps):
@@ -61,7 +61,7 @@ Removed (full version in `configuration.full.nix`):
 
 ### Filesystems (`modules/machines/nixos/sweet/filesystems/`)
 
-Removed (original config expected 3 data + 1 parity drives from notthebee's setup):
+Removed (original config expected 3 data + 1 parity drives):
 
 - `fileSystems."/mnt/data1"` through `/mnt/data3` — XFS data drives (`Data1`, `Data2`, `Data3` labels)
 - `fileSystems."/mnt/parity1"` — XFS parity drive (`Parity1` label)
@@ -181,23 +181,9 @@ cp sweet/configuration.full.nix sweet/configuration.nix
 cp sweet/homelab/full.nix sweet/homelab/default.nix
 ```
 
-**Important**: Before restoring, make sure to update all `notthebee` references to `bmasi`
-in the full config files (see Username section below).
-
 ### 5. Rebuild
 
 ```bash
 cd /etc/nixos
 nixos-rebuild switch --flake /etc/nixos#sweet
 ```
-
-## Username change
-
-The user was renamed from `notthebee` to `bmasi`. This needs to be updated in the full configs:
-
-- `_common/default.full.nix` — user definition, SSH paths
-- `users/notthebee/` directory — rename to `users/bmasi/`
-- `default.full.nix` builder — `home-manager.users.notthebee` -> `home-manager.users.bmasi`
-- All home-manager references
-- SSH key paths (`~/.ssh/notthebee` -> your key)
-- Git config in `users/notthebee/gitconfig.nix`

@@ -53,9 +53,9 @@ in
       sites.${cfg.url} = {
         invoiceTemplates =
           let
-            notthebee = pkgs.callPackage ./template.nix { };
+            bmasi = pkgs.callPackage ./template.nix { };
           in
-          [ notthebee ];
+          [ bmasi ];
         settings = {
           DISABLE_SETUP = true;
           SETUP_COMPLETED = true;

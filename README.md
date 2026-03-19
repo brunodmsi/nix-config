@@ -151,4 +151,4 @@ After booting on real disk, follow [RESTORE.md](RESTORE.md) to:
 2. **Set up agenix secrets** — Generate host SSH key, encrypt real secrets
 3. **Set up data drives** — Format and mount the 2x 12TB HDDs
 4. **Restore full config** — Copy `.full.nix` files back and rebuild
-5. **Rename user references** — Update `notthebee` -> `bmasi` in full configs
+5. **Update personal settings** — SSH keys, git config, email addresses

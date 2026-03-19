@@ -1,9 +1,9 @@
 { stdenv }:
 stdenv.mkDerivation rec {
-  name = "keycloak_theme_notthebee";
+  name = "keycloak_theme_bmasi";
   version = "1.0";
 
-  src = ./themes/notthebee;
+  src = ./themes/bmasi;
 
   nativeBuildInputs = [ ];
   buildInputs = [ ];

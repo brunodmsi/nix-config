@@ -19,7 +19,7 @@
         email = "mail@weirdrescue.pw";
       };
       core = {
-        sshCommand = "ssh -o 'IdentitiesOnly=yes' -i ~/.ssh/notthebee";
+        sshCommand = "ssh -o 'IdentitiesOnly=yes' -i ~/.ssh/bmasi";
       };
     };
     includes = [

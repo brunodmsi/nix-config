@@ -29,6 +29,6 @@ maven.buildMavenPackage rec {
       binaryBytecode
     ];
     license = licenses.asl20;
-    maintainers = with maintainers; [ notthebee ];
+    maintainers = with maintainers; [ bmasi ];
   };
 }

@@ -43,7 +43,7 @@
   time.timeZone = "Europe/Berlin";
 
   users.users = {
-    notthebee = {
+    bmasi = {
       hashedPasswordFile = config.age.secrets.hashedUserPassword.path;
     };
     root = {
@@ -90,8 +90,8 @@
       hashedUserPassword.file = "${inputs.secrets}/hashedUserPassword.age";
       smtpPassword = {
         file = "${inputs.secrets}/smtpPassword.age";
-        owner = "notthebee";
-        group = "notthebee";
+        owner = "bmasi";
+        group = "bmasi";
         mode = "0440";
       };
     };

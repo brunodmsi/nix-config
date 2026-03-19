@@ -3,11 +3,11 @@
   ...
 }:
 {
-  nix.settings.trusted-users = [ "notthebee" ];
+  nix.settings.trusted-users = [ "bmasi" ];
 
   users = {
     users = {
-      notthebee = {
+      bmasi = {
         shell = pkgs.zsh;
         uid = 1000;
         isNormalUser = true;
@@ -18,14 +18,14 @@
           "podman"
           "input"
         ];
-        group = "notthebee";
+        group = "bmasi";
         openssh.authorizedKeys.keys = [
           "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKGUGMUo1dRl9xoDlMxQGb8dNSY+6xiEpbZWAu6FAbWw moe@notthebe.ee"
         ];
       };
     };
     groups = {
-      notthebee = {
+      bmasi = {
         gid = 1000;
       };
     };

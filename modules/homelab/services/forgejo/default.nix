@@ -48,7 +48,7 @@ in
           DOMAIN = cfg.url;
           ROOT_URL = "https://${cfg.url}/";
           HTTP_PORT = 3000;
-          LANDING_PAGE = "/notthebee";
+          LANDING_PAGE = "/bmasi";
           SSH_PORT = lib.head config.services.openssh.ports;
         };
         log = {

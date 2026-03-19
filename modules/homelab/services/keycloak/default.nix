@@ -67,12 +67,12 @@ in
       (lib.mkIf cfg.enable {
         environment.systemPackages = [
           pkgs.keycloak
-          pkgs.custom_keycloak_themes.notthebee
+          pkgs.custom_keycloak_themes.bmasi
         ];
         nixpkgs.overlays = [
           (_final: _prev: {
             custom_keycloak_themes = {
-              notthebee = pkgs.callPackage ./theme.nix { };
+              bmasi = pkgs.callPackage ./theme.nix { };
             };
           })
         ];
@@ -104,7 +104,7 @@ in
           initialAdminPassword = "schneke123";
           database.passwordFile = cfg.dbPasswordFile;
           themes = {
-            notthebee = pkgs.custom_keycloak_themes.notthebee;
+            bmasi = pkgs.custom_keycloak_themes.bmasi;
           };
           settings = {
             spi-theme-static-max-age = "-1";

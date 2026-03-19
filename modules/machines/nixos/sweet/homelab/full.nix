@@ -66,7 +66,7 @@ in
         enable = true;
         passwordFile = config.age.secrets.resticPassword.path;
         s3.enable = true;
-        s3.url = "https://s3.eu-central-003.backblazeb2.com/notthebee-ojfca-backups";
+        s3.url = "https://s3.eu-central-003.backblazeb2.com/bmasi-ojfca-backups";
         s3.environmentFile = config.age.secrets.resticBackblazeEnv.path;
         local.enable = true;
       };
@@ -102,7 +102,7 @@ in
       nextcloud = {
         enable = true;
         admin = {
-          username = "notthebee";
+          username = "bmasi";
           passwordFile = config.age.secrets.nextcloudAdminPassword.path;
         };
       };

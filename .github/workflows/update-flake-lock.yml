@@ -15,12 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up SSH
-        uses: https://${{ env.FORGEJO_HOST }}/notthebee/actions/set-up-ssh@main
+        uses: https://${{ env.FORGEJO_HOST }}/bmasi/actions/set-up-ssh@main
         with:
           git-host: ${{ env.FORGEJO_HOST }}
           ssh-key: ${{ secrets.SECRETS_REPOSITORY_PRIVATE_KEY }}
           git-hostkey: ${{ secrets.GIT_HOSTKEY }}
-      - uses: https://${{ env.FORGEJO_HOST }}/notthebee/actions/setup-attic-cache@main
+      - uses: https://${{ env.FORGEJO_HOST }}/bmasi/actions/setup-attic-cache@main
         with:
           attic-token: ${{ secrets.ATTIC_TOKEN }}
           attic-url: https://${{ env.ATTIC_HOST }}
@@ -34,4 +34,4 @@ jobs:
           git add flake.lock
           git diff-index --quiet HEAD || git commit -m "chore: Update flake.lock"
           git push origin main
-      - uses: https://${{ env.FORGEJO_HOST }}/notthebee/actions/cache-to-attic@main
+      - uses: https://${{ env.FORGEJO_HOST }}/bmasi/actions/cache-to-attic@main
