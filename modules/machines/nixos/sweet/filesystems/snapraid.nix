@@ -7,6 +7,7 @@
     ];
     contentFiles = [
       "/mnt/data1/snapraid.content"
+      "/persist/snapraid/snapraid.content"
     ];
     dataDisks = {
       d1 = "/mnt/data1";
