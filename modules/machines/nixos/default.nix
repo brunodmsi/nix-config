@@ -26,6 +26,14 @@ in
 
             modules = [
               ../../homelab
+              ../../misc/email
+              ../../misc/tg-notify
+              ../../misc/mover
+              ../../misc/withings2intervals
+              self.inputs.autoaspm.nixosModules.default
+              self.inputs.fmatrix.nixosModules.default
+              self.inputs.invoiceplane.nixosModules.default
+              self.inputs.adios-bot.nixosModules.default
               (./. + "/_common/default.nix")
               (./. + "/${name}/configuration.nix")
             ];
