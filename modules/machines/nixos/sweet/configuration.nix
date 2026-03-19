@@ -52,8 +52,7 @@
         rootPool = "-part3";
       };
       bootDevices = [
-        "ata-Samsung_SSD_870_EVO_250GB_S6PENL0T902873K"
-        "ata-Samsung_SSD_870_EVO_250GB_S6PENL0T905657B"
+        "nvme-KINGSTON_SNV3S500G_50026B76878184EA"
       ];
       immutable = true;
       availableKernelModules = [
