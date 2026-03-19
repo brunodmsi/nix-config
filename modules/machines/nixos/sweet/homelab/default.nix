@@ -39,6 +39,20 @@
           "http://uptime.demasi.dev"
         ];
       };
+      # Arr stack
+      sonarr.enable = true;
+      radarr.enable = true;
+      bazarr.enable = true;
+      prowlarr.enable = true;
+      jellyseerr.enable = true;
+      # Download clients (run in VPN namespace)
+      deluge.enable = true;
+      sabnzbd.enable = true;
+      # VPN namespace
+      wireguard-netns = {
+        enable = true;
+        configFile = config.age.secrets.mullvadWireguard.path;
+      };
     };
   };
 

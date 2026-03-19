@@ -128,7 +128,6 @@ in
       # server
       {
         services.caddy.virtualHosts."http://${cfg.url}" = {
-          useACMEHost = "demasi.dev";
           extraConfig = ''
             handle {
               forward_auth 127.0.0.1:4192 {

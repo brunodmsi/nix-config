@@ -139,7 +139,6 @@ in
       # server
       {
         services.caddy.virtualHosts."http://${cfg.url}" = {
-          useACMEHost = "demasi.dev";
           extraConfig = ''
             reverse_proxy http://127.0.0.1:8821
             handle /oauth2/* {

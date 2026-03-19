@@ -89,7 +89,6 @@ in
       })
       {
         services.caddy.virtualHosts."http://${cfg.url}" = {
-          useACMEHost = "demasi.dev";
           extraConfig = ''
             reverse_proxy http://${addr}:${toString port}
           '';

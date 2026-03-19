@@ -94,6 +94,7 @@
         file = "${inputs.secrets}/autheliaUsersFile.age";
         owner = "authelia-main";
       };
+      mullvadWireguard.file = "${inputs.secrets}/mullvadWireguard.age";
     };
   };
 

@@ -48,7 +48,6 @@ in
       listenHost = "127.0.0.1";
     };
     services.caddy.virtualHosts."http://${cfg.url}" = {
-      useACMEHost = hl.baseDomain;
       extraConfig = ''
         reverse_proxy http://${config.services.${service}.listenHost}:${
           toString config.services.${service}.listenPort
