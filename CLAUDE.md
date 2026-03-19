@@ -51,6 +51,40 @@ Full configs are saved as `.full.nix` files:
 - Disko config must match the NixOS zfs-root boot config (immutable=true → `rpool/nixos/empty`, immutable=false → `rpool/nixos/root`)
 - When disabling services, prefer `enable = false` over removing code — keep structure for re-enabling
 - Test config changes will be evaluated on the server, not locally
+- Domain is `demasi.dev` (Cloudflare DNS, nameservers moved from Route 53)
+- Cloudflare Tunnel (`cloudflared`) for external access — routes managed in Cloudflare dashboard, protocol forced to `http2`
+
+## Secrets management (agenix)
+
+**Every secret must go through agenix. Never hardcode secrets or use plain files on disk.**
+
+- Secrets repo: `github:brunodmsi/nix-secrets` (public — files are age-encrypted)
+- Identity key: `/persist/ssh/ssh_host_ed25519_key` on the server
+- Secrets are declared in `sweet/configuration.nix` under `age.secrets`
+- Referenced in service configs via `config.age.secrets.<name>.path`
+
+### Adding a new secret
+
+1. Add the entry to `secrets.nix` in the nix-secrets repo:
+   ```nix
+   "myNewSecret.age".publicKeys = all;
+   ```
+2. Encrypt it on the server:
+   ```bash
+   cd /tmp/nix-secrets && git pull
+   rm myNewSecret.age  # remove placeholder if exists
+   sudo EDITOR=nano nix run github:ryantm/agenix -- -e myNewSecret.age -i /persist/ssh/ssh_host_ed25519_key
+   git add -A && git commit -m "Encrypt myNewSecret" && git push
+   ```
+3. Declare it in `sweet/configuration.nix`:
+   ```nix
+   age.secrets.myNewSecret.file = "${inputs.secrets}/myNewSecret.age";
+   ```
+4. Reference it in service config:
+   ```nix
+   someService.passwordFile = config.age.secrets.myNewSecret.path;
+   ```
+5. Push nix-config, pull and rebuild on server.
 
 ## Common workflows
 
