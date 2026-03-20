@@ -1,4 +1,3 @@
-# Minimal common config for initial install. See default.full.nix for the complete version.
 {
   config,
   pkgs,
@@ -18,14 +17,15 @@
   users.users = {
     bmasi = {
       isNormalUser = true;
-      initialPassword = "changeme";
+      hashedPasswordFile = config.age.secrets.hashedUserPassword.path;
       extraGroups = [ "wheel" ];
     };
     root = {
-      initialPassword = "changeme";
+      hashedPasswordFile = config.age.secrets.hashedUserPassword.path;
     };
   };
 
+  # Use persistent SSH host keys (survive immutable root rollback)
   services.openssh = {
     enable = true;
     settings = {
@@ -33,6 +33,17 @@
       PermitRootLogin = "yes";
     };
     ports = [ 22 ];
+    hostKeys = [
+      {
+        path = "/persist/ssh/ssh_host_ed25519_key";
+        type = "ed25519";
+      }
+      {
+        path = "/persist/ssh/ssh_host_rsa_key";
+        type = "rsa";
+        bits = 4096;
+      }
+    ];
   };
 
   security.sudo = {
