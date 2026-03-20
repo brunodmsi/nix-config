@@ -99,6 +99,7 @@ in
     ./arr/jellyseerr
     ./arr/sonarr
     ./arr/radarr
+    #./arr/lidarr
     ./deluge
     ./homepage
     ./immich

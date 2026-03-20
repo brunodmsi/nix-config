@@ -1,0 +1,37 @@
+name: Update flake.lock
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+env:
+  FORGEJO_HOST: git.notthebe.ee
+  ATTIC_HOST: cache.notthebe.ee
+
+jobs:
+  update-flake-lock:
+    runs-on: nix
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        uses: https://${{ env.FORGEJO_HOST }}/bmasi/actions/set-up-ssh@main
+        with:
+          git-host: ${{ env.FORGEJO_HOST }}
+          ssh-key: ${{ secrets.SECRETS_REPOSITORY_PRIVATE_KEY }}
+          git-hostkey: ${{ secrets.GIT_HOSTKEY }}
+      - uses: https://${{ env.FORGEJO_HOST }}/bmasi/actions/setup-attic-cache@main
+        with:
+          attic-token: ${{ secrets.ATTIC_TOKEN }}
+          attic-url: https://${{ env.ATTIC_HOST }}
+      - name: "Update nix flake"
+        run: |
+          nix flake update
+      - name: "Commit and push the new flake.lock"
+        run: |
+          git config user.name forgejo-actions
+          git config user.email forgejo@git.notthebe.ee
+          git add flake.lock
+          git diff-index --quiet HEAD || git commit -m "chore: Update flake.lock"
+          git push origin main
+      - uses: https://${{ env.FORGEJO_HOST }}/bmasi/actions/cache-to-attic@main
