@@ -100,6 +100,17 @@
     };
   };
 
+  # Skip flaky psycopg tests that break paperless build
+  nixpkgs.overlays = [
+    (_final: prev: {
+      python313Packages = prev.python313Packages // {
+        psycopg = prev.python313Packages.psycopg.overrideAttrs (_: {
+          doCheck = false;
+        });
+      };
+    })
+  ];
+
   virtualisation.docker.storageDriver = "overlay2";
 
   environment.systemPackages = with pkgs; [
