@@ -187,3 +187,49 @@ cp sweet/homelab/full.nix sweet/homelab/default.nix
 cd /etc/nixos
 nixos-rebuild switch --flake /etc/nixos#sweet
 ```
+
+## Disaster recovery scenarios
+
+### Boot NVMe dies
+- **NixOS config**: safe (GitHub: brunodmsi/nix-config)
+- **Secrets**: safe (GitHub: brunodmsi/nix-secrets, age-encrypted)
+- **Service databases**: safe (daily rsync to /mnt/data1/Backups)
+- **Media files**: safe (on data HDD)
+- **Recovery**: install new NVMe, reinstall NixOS via README runbook, rsync backups back to /var/lib/ and /persist/
+
+### Data HDD dies
+- **Media**: recoverable from parity drive via `snapraid fix`
+- **Service DB backups**: LOST (stored on same HDD)
+- **Recovery**: replace drive, run `snapraid fix` to reconstruct data from parity
+
+### Parity HDD dies
+- **Everything**: safe, data drive is unaffected
+- **Recovery**: replace parity drive, run `snapraid sync` to rebuild parity
+
+### Both HDDs die
+- **Everything local**: LOST
+- **NixOS config + secrets**: safe (GitHub)
+- **Recovery**: start from scratch, re-download media
+
+### All drives die (fire/theft/power surge)
+- Only GitHub repos survive
+- **No off-site backup currently**
+
+## TODO: Off-site backup
+
+Set up Backblaze B2 (~$5/month) for:
+- Service databases (/var/lib/ critical dirs) — small, back up daily
+- Nextcloud data — depends on size
+- /persist/ (SSH keys, etc.)
+
+Media files are replaceable (re-download) so skip those to save cost.
+Use restic with B2 backend for encrypted, incremental backups.
+
+## Snapraid notes
+
+Current setup: 1 data drive + 1 parity drive.
+- Protects against a SINGLE drive failure only
+- NOT a mirror — parity can reconstruct, but needs a replacement drive
+- NOT off-site — both drives in same machine
+- Run `snapraid sync` periodically (set up as systemd timer)
+- Run `snapraid scrub` to verify data integrity
