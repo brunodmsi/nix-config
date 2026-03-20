@@ -41,9 +41,23 @@ in
       };
     };
     environment.etc."netns/${cfg.namespace}/resolv.conf".text = ''
-      nameserver 8.8.8.8
-      nameserver 8.8.4.4
+      nameserver 127.0.0.53
     '';
+
+    # DNS-over-HTTPS proxy inside VPN namespace (bypasses DNS port 53 filtering)
+    systemd.services.doh-proxy-wg = {
+      description = "DNS-over-HTTPS proxy in WireGuard namespace";
+      bindsTo = [ "netns@${cfg.namespace}.service" ];
+      requires = [ "${cfg.namespace}.service" ];
+      after = [ "${cfg.namespace}.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        NetworkNamespacePath = "/var/run/netns/${cfg.namespace}";
+        ExecStart = "${pkgs.cloudflared}/bin/cloudflared proxy-dns --address 127.0.0.53 --port 53 --upstream https://dns.google/dns-query";
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+    };
 
     systemd.services.${cfg.namespace} = {
       description = "${cfg.namespace} network interface";
