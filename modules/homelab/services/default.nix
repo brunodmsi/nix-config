@@ -106,6 +106,8 @@ in
     ./jellyfin
     ./microbin
     ./miniflux
+    ./monitoring/prometheus
+    ./monitoring/grafana
     ./nextcloud
     ./paperless-ngx
     ./uptime-kuma

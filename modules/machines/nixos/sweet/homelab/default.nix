@@ -38,6 +38,8 @@
           "http://homepage.demasi.dev"
           "http://uptime.demasi.dev"
           "http://deluge.demasi.dev"
+          "http://grafana.demasi.dev"
+          "http://prometheus.demasi.dev"
         ];
       };
       # Arr stack
@@ -48,6 +50,9 @@
       jellyseerr.enable = true;
       # Download clients (run in VPN namespace)
       deluge.enable = true;
+      # Monitoring
+      prometheus.enable = true;
+      grafana.enable = true;
       # VPN namespace
       wireguard-netns = {
         enable = true;
@@ -99,6 +104,8 @@
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/deluge/ /mnt/data1/Backups/var-lib/deluge/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/uptime-kuma/ /mnt/data1/Backups/var-lib/uptime-kuma/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/homepage-dashboard/ /mnt/data1/Backups/var-lib/homepage-dashboard/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/grafana/ /mnt/data1/Backups/var-lib/grafana/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/prometheus2/ /mnt/data1/Backups/var-lib/prometheus2/
       '';
     };
   };
