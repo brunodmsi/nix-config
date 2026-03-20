@@ -12,15 +12,17 @@
     cpu.intel.updateMicrocode = true;
     graphics = {
       enable = true;
-      extraPackages = with pkgs; [
-        intel-media-driver
-        intel-vaapi-driver
-        libva-vdpau-driver
-        intel-compute-runtime
-        vpl-gpu-rt
-      ];
+    };
+    nvidia = {
+      open = false;
+      modesetting.enable = true;
     };
   };
+  services.xserver.videoDrivers = [ "nvidia" ];
+  hardware.nvidia-container-toolkit.enable = true;
+
+  # Allow Jellyfin to access the GPU
+  users.users.jellyfin.extraGroups = [ "video" "render" ];
   boot = {
     zfs.forceImportRoot = true;
     kernelParams = [
