@@ -46,6 +46,7 @@ in
 
     # Prevent nscd from being used inside the namespace (it bypasses the namespace's DNS)
     services.nscd.enable = false;
+    system.nssModules = lib.mkForce [];
 
     # DNS-over-HTTPS proxy inside VPN namespace (bypasses DNS port 53 filtering)
     systemd.services.doh-proxy-wg = {
