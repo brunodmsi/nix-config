@@ -44,6 +44,9 @@ in
       nameserver 127.0.0.53
     '';
 
+    # Prevent nscd from being used inside the namespace (it bypasses the namespace's DNS)
+    services.nscd.enable = false;
+
     # DNS-over-HTTPS proxy inside VPN namespace (bypasses DNS port 53 filtering)
     systemd.services.doh-proxy-wg = {
       description = "DNS-over-HTTPS proxy in WireGuard namespace";
