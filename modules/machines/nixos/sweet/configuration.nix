@@ -95,6 +95,7 @@
         owner = "authelia-main";
       };
       mullvadWireguard.file = "${inputs.secrets}/mullvadWireguard.age";
+      nextcloudAdminPassword.file = "${inputs.secrets}/nextcloudAdminPassword.age";
     };
   };
 

@@ -50,6 +50,11 @@
       jellyseerr.enable = true;
       # Download clients (run in VPN namespace)
       deluge.enable = true;
+      # Nextcloud
+      nextcloud = {
+        enable = true;
+        admin.passwordFile = config.age.secrets.nextcloudAdminPassword.path;
+      };
       # Monitoring
       prometheus.enable = true;
       grafana.enable = true;
@@ -106,6 +111,8 @@
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/homepage-dashboard/ /mnt/data1/Backups/var-lib/homepage-dashboard/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/grafana/ /mnt/data1/Backups/var-lib/grafana/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/prometheus2/ /mnt/data1/Backups/var-lib/prometheus2/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/nextcloud/ /mnt/data1/Backups/var-lib/nextcloud/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/postgresql/ /mnt/data1/Backups/var-lib/postgresql/
       '';
     };
   };
