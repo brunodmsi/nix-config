@@ -101,17 +101,15 @@
   };
 
   # Skip flaky psycopg tests that break paperless build
-  nixpkgs.overlays = [
-    (_final: prev: {
-      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-        (python-final: python-prev: {
-          psycopg = python-prev.psycopg.overrideAttrs (_: {
-            doCheck = false;
-          });
-        })
-      ];
-    })
-  ];
+  nixpkgs.config.packageOverrides = pkgs: {
+    python313Packages = pkgs.python313Packages.override {
+      overrides = _self: super: {
+        psycopg = super.psycopg.overrideAttrs (_: {
+          doCheck = false;
+        });
+      };
+    };
+  };
 
   virtualisation.docker.storageDriver = "overlay2";
 
