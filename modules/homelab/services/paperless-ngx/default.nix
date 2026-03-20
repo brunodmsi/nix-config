@@ -11,11 +11,11 @@ in
     };
     mediaDir = lib.mkOption {
       type = lib.types.str;
-      default = "${homelab.mounts.fast}/Documents/Paperless/Documents";
+      default = "/mnt/data1/Documents/Paperless/Documents";
     };
     consumptionDir = lib.mkOption {
       type = lib.types.str;
-      default = "${homelab.mounts.fast}/Documents/Paperless/Import";
+      default = "/mnt/data1/Documents/Paperless/Import";
     };
     passwordFile = lib.mkOption {
       type = lib.types.path;
@@ -27,15 +27,6 @@ in
     url = lib.mkOption {
       type = lib.types.str;
       default = "paperless.${homelab.baseDomain}";
-    };
-    monitoredServices = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [
-        "paperless-consumer"
-        "paperless-scheduler"
-        "paperless-task-queue"
-        "paperless-web"
-      ];
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -53,7 +44,6 @@ in
       type = lib.types.str;
       default = "Services";
     };
-
   };
   config = lib.mkIf cfg.enable {
     services = {
@@ -70,15 +60,14 @@ in
             ".DS_STORE/*"
             "desktop.ini"
           ];
-          PAPERLESS_OCR_LANGUAGE = "deu+eng";
+          PAPERLESS_OCR_LANGUAGE = "por+eng";
           PAPERLESS_OCR_USER_ARGS = {
             optimize = 1;
             pdfa_image_compression = "lossless";
           };
         };
       };
-      caddy.virtualHosts."${cfg.url}" = {
-        
+      caddy.virtualHosts."http://${cfg.url}" = {
         extraConfig = ''
           reverse_proxy http://127.0.0.1:${toString config.services.${service}.port}
         '';

@@ -96,6 +96,7 @@
       mullvadWireguard.file = "${inputs.secrets}/mullvadWireguard.age";
       nextcloudAdminPassword.file = "${inputs.secrets}/nextcloudAdminPassword.age";
       hashedUserPassword.file = "${inputs.secrets}/hashedUserPassword.age";
+      paperlessPassword.file = "${inputs.secrets}/paperlessPassword.age";
     };
   };
 

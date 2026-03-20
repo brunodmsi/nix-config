@@ -60,6 +60,11 @@
         enable = true;
         admin.passwordFile = config.age.secrets.nextcloudAdminPassword.path;
       };
+      # Documents
+      paperless = {
+        enable = true;
+        passwordFile = config.age.secrets.paperlessPassword.path;
+      };
       # Monitoring
       prometheus.enable = true;
       grafana.enable = true;
@@ -94,6 +99,10 @@
     "d /mnt/data1/Media/Movies 0775 share share - -"
     "d /mnt/data1/Media/Music 0775 share share - -"
     "d /mnt/data1/Media/Photos 0775 immich share - -"
+    "d /mnt/data1/Documents 0775 share share - -"
+    "d /mnt/data1/Documents/Paperless 0775 share share - -"
+    "d /mnt/data1/Documents/Paperless/Documents 0775 share share - -"
+    "d /mnt/data1/Documents/Paperless/Import 0775 share share - -"
     "d /mnt/data1/Backups 0700 root root - -"
     "d /mnt/data1/Backups/var-lib 0700 root root - -"
     "d /mnt/data1/Backups/persist 0700 root root - -"
@@ -120,6 +129,7 @@
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/nextcloud/ /mnt/data1/Backups/var-lib/nextcloud/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/postgresql/ /mnt/data1/Backups/var-lib/postgresql/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/immich/ /mnt/data1/Backups/var-lib/immich/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/paperless/ /mnt/data1/Backups/var-lib/paperless/
       '';
     };
   };
