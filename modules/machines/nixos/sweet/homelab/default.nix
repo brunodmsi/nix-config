@@ -50,6 +50,11 @@
       jellyseerr.enable = true;
       # Download clients (run in VPN namespace)
       deluge.enable = true;
+      # Photos
+      immich = {
+        enable = true;
+        mediaDir = "/mnt/data1/Media/Photos";
+      };
       # Nextcloud
       nextcloud = {
         enable = true;
@@ -88,6 +93,7 @@
     "d /mnt/data1/Media/TV 0775 share share - -"
     "d /mnt/data1/Media/Movies 0775 share share - -"
     "d /mnt/data1/Media/Music 0775 share share - -"
+    "d /mnt/data1/Media/Photos 0775 immich share - -"
     "d /mnt/data1/Backups 0700 root root - -"
     "d /mnt/data1/Backups/var-lib 0700 root root - -"
     "d /mnt/data1/Backups/persist 0700 root root - -"
@@ -113,6 +119,7 @@
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/prometheus2/ /mnt/data1/Backups/var-lib/prometheus2/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/nextcloud/ /mnt/data1/Backups/var-lib/nextcloud/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/postgresql/ /mnt/data1/Backups/var-lib/postgresql/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/immich/ /mnt/data1/Backups/var-lib/immich/
       '';
     };
   };
