@@ -104,12 +104,10 @@ in
     ./homepage
     ./immich
     ./jellyfin
-    ./keycloak
     ./microbin
     ./miniflux
     ./nextcloud
     ./paperless-ngx
-    ./slskd
     ./uptime-kuma
     ./vaultwarden
     ./wireguard-netns
