@@ -103,11 +103,13 @@
   # Skip flaky psycopg tests that break paperless build
   nixpkgs.overlays = [
     (_final: prev: {
-      python313Packages = prev.python313Packages // {
-        psycopg = prev.python313Packages.psycopg.overrideAttrs (_: {
-          doCheck = false;
-        });
-      };
+      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+        (python-final: python-prev: {
+          psycopg = python-prev.psycopg.overrideAttrs (_: {
+            doCheck = false;
+          });
+        })
+      ];
     })
   ];
 
