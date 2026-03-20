@@ -86,6 +86,7 @@ in
         uid = 994;
         isSystemUser = true;
         group = cfg.group;
+        extraGroups = [ "video" "render" ];
       };
     };
   };
