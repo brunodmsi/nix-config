@@ -9,7 +9,7 @@
 {
   hardware = {
     enableRedistributableFirmware = true;
-    cpu.intel.updateMicrocode = true;
+    cpu.amd.updateMicrocode = true;
     graphics = {
       enable = true;
     };
