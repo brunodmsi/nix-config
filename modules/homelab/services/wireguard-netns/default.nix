@@ -41,7 +41,8 @@ in
       };
     };
     environment.etc."netns/${cfg.namespace}/resolv.conf".text = ''
-      nameserver 10.64.0.1
+      nameserver 8.8.8.8
+      nameserver 8.8.4.4
     '';
 
     systemd.services.${cfg.namespace} = {
