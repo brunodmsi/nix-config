@@ -38,6 +38,7 @@ in
     services.${service} = {
       enable = true;
     };
+    systemd.services.${service}.environment.HOME = cfg.configDir;
     services.caddy.virtualHosts."http://${cfg.url}" = {
       
       extraConfig = ''
