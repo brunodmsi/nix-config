@@ -135,24 +135,16 @@ in
           export PRISMA_SCHEMA_ENGINE_BINARY=${pkgs.prisma-engines}/bin/schema-engine
           export PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 
-          if [ ! -f /var/lib/evolution-api/dist/main.js ]; then
+          if [ ! -f /var/lib/evolution-api/src/main.ts ]; then
             echo "[evolution] Cloning v${evolutionVersion}..."
             ${pkgs.git}/bin/git clone --depth 1 --branch ${evolutionVersion} https://github.com/EvolutionAPI/evolution-api.git /tmp/evolution-src
 
-            echo "[evolution] Installing ALL dependencies..."
+            echo "[evolution] Installing dependencies..."
             cd /tmp/evolution-src
-            ${pkgs.nodejs}/bin/npm install --include=dev
-
-            echo "[evolution] Building..."
-            ${pkgs.nodejs}/bin/npm run build
+            ${pkgs.nodejs}/bin/npm install
 
             echo "[evolution] Copying to /var/lib/evolution-api..."
-            rm -rf /var/lib/evolution-api/dist /var/lib/evolution-api/node_modules
-            cp -r /tmp/evolution-src/dist /var/lib/evolution-api/
-            cp -r /tmp/evolution-src/node_modules /var/lib/evolution-api/
-            cp -r /tmp/evolution-src/prisma /var/lib/evolution-api/
-            cp /tmp/evolution-src/package.json /var/lib/evolution-api/
-            cp /tmp/evolution-src/runWithProvider.js /var/lib/evolution-api/
+            cp -r /tmp/evolution-src/* /var/lib/evolution-api/
             cp /tmp/evolution-src/.env.example /var/lib/evolution-api/.env 2>/dev/null || true
             rm -rf /tmp/evolution-src
 
@@ -165,7 +157,7 @@ in
           export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:$PATH
           export HOME=/var/lib/evolution-api
           cd /var/lib/evolution-api
-          exec ${pkgs.nodejs}/bin/node dist/main.js
+          exec ${pkgs.nodejs}/bin/npx tsx ./src/main.ts
         '';
         Restart = "on-failure";
         RestartSec = 10;
