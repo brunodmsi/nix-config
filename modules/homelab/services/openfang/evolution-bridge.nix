@@ -10,7 +10,7 @@ let
   cfg = homelab.services.openfang;
   evolutionPort = 8080;
   evolutionApiKey = "openfang-evolution-bridge";
-  instanceName = "sweet-whatsapp";
+  instanceName = "sweet-zap";
 
   bridgeScript = pkgs.writeShellScript "evolution-openfang-bridge" ''
     export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
