@@ -69,7 +69,7 @@
       openfang = {
         enable = true;
         llmProvider = "openai";
-        llmModel = "gpt-4o";
+        llmModel = "gpt-4.1-mini";
         apiKeyEnvVar = "OPENAI_API_KEY";
         apiKeyFile = config.age.secrets.openfangApiKey.path;
       };
