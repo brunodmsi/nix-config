@@ -68,16 +68,13 @@ let
           exit 0
         fi
 
-        # Atomic dedup using flock
+        # Atomic dedup using mkdir (atomic on all filesystems)
         DEDUP_DIR="/var/lib/openfang/dedup"
-        mkdir -p "$DEDUP_DIR"
-        LOCK_FILE="$DEDUP_DIR/$MSG_ID"
-        exec 9>"$LOCK_FILE"
-        if ! ${pkgs.util-linux}/bin/flock -n 9; then
+        if ! mkdir "$DEDUP_DIR/$MSG_ID" 2>/dev/null; then
           exit 0
         fi
-        # Clean old dedup files in background
-        find "$DEDUP_DIR" -mmin +2 -delete 2>/dev/null &
+        # Clean old dedup dirs in background
+        find "$DEDUP_DIR" -maxdepth 1 -type d -mmin +2 -exec rmdir {} \; 2>/dev/null &
 
         SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
         SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
