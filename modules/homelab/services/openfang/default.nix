@@ -144,7 +144,7 @@ in
       };
       serviceConfig = {
         ExecStartPre = pkgs.writeShellScript "whatsapp-gateway-setup" ''
-          export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.nodejs}/bin:$PATH
+          export PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.git}/bin:${pkgs.nodejs}/bin:${pkgs.gnumake}/bin:${pkgs.python3}/bin:${pkgs.gcc}/bin:$PATH
           if [ ! -d ${cfg.dataDir}/whatsapp-gateway/node_modules ]; then
             mkdir -p ${cfg.dataDir}/whatsapp-gateway
             ${pkgs.git}/bin/git clone --depth 1 https://github.com/RightNow-AI/openfang.git /tmp/openfang-src || true
@@ -152,7 +152,7 @@ in
               cp -r /tmp/openfang-src/packages/whatsapp-gateway/* ${cfg.dataDir}/whatsapp-gateway/
               rm -rf /tmp/openfang-src
               cd ${cfg.dataDir}/whatsapp-gateway
-              ${pkgs.nodejs}/bin/npm install --production
+              ${pkgs.nodejs}/bin/npm install --omit=dev
             fi
           fi
         '';
