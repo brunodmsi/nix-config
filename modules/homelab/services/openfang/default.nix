@@ -9,6 +9,8 @@ let
   cfg = homelab.services.openfang;
 in
 {
+  imports = [ ./evolution-bridge.nix ];
+
   options.homelab.services.openfang = {
     enable = lib.mkEnableOption "OpenFang AI Agent";
     configDir = lib.mkOption {
@@ -140,42 +142,7 @@ in
       };
     };
 
-    # WhatsApp Web Gateway (Node.js)
-    systemd.services.openfang-whatsapp-gateway = {
-      description = "OpenFang WhatsApp Web Gateway";
-      after = [ "network-online.target" "openfang-install.service" ];
-      wants = [ "network-online.target" ];
-      requires = [ "openfang-install.service" ];
-      wantedBy = [ "multi-user.target" ];
-      environment = {
-        PORT = toString cfg.whatsappGatewayPort;
-        HOME = cfg.configDir;
-        OPENFANG_URL = "http://127.0.0.1:50051";
-        OPENFANG_DEFAULT_AGENT = "60d2d829-51e0-4ee4-ac90-304e7b50257c";
-      };
-      serviceConfig = {
-        ExecStartPre = pkgs.writeShellScript "whatsapp-gateway-setup" ''
-          export PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.git}/bin:${pkgs.nodejs}/bin:${pkgs.gnumake}/bin:${pkgs.python3}/bin:${pkgs.gcc}/bin:$PATH
-          if [ ! -d ${cfg.dataDir}/whatsapp-gateway/node_modules ]; then
-            mkdir -p ${cfg.dataDir}/whatsapp-gateway
-            ${pkgs.git}/bin/git clone --depth 1 https://github.com/RightNow-AI/openfang.git /tmp/openfang-src || true
-            if [ -d /tmp/openfang-src/packages/whatsapp-gateway ]; then
-              cp -r /tmp/openfang-src/packages/whatsapp-gateway/* ${cfg.dataDir}/whatsapp-gateway/
-              rm -rf /tmp/openfang-src
-              cd ${cfg.dataDir}/whatsapp-gateway
-              ${pkgs.nodejs}/bin/npm install --omit=dev
-            fi
-          fi
-        '';
-        ExecStart = pkgs.writeShellScript "whatsapp-gateway-run" ''
-          cd ${cfg.dataDir}/whatsapp-gateway
-          exec ${pkgs.nodejs}/bin/node index.js
-        '';
-        Restart = "on-failure";
-        RestartSec = 10;
-        WorkingDirectory = cfg.dataDir;
-      };
-    };
+    # WhatsApp via Evolution API (see evolution-bridge.nix)
 
     # Caddy reverse proxy
     services.caddy.virtualHosts."http://${cfg.url}" = {
