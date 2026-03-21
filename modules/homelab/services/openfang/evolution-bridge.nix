@@ -122,12 +122,18 @@ in
         DATABASE_SAVE_DATA_HISTORIC = "true";
         NODE_ENV = "production";
         HOME = "/var/lib/evolution-api";
+        PRISMA_QUERY_ENGINE_LIBRARY = "${pkgs.prisma-engines}/lib/libquery_engine.node";
+        PRISMA_SCHEMA_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/schema-engine";
+        PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING = "1";
       };
       path = [ pkgs.nodejs pkgs.bash pkgs.coreutils pkgs.git ];
       serviceConfig = {
         ExecStartPre = pkgs.writeShellScript "evolution-setup" ''
-          export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.gnumake}/bin:${pkgs.python3}/bin:$PATH
+          export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.gnumake}/bin:${pkgs.python3}/bin:${pkgs.openssl}/bin:$PATH
           export HOME=/var/lib/evolution-api
+          export PRISMA_QUERY_ENGINE_LIBRARY=${pkgs.prisma-engines}/lib/libquery_engine.node
+          export PRISMA_SCHEMA_ENGINE_BINARY=${pkgs.prisma-engines}/bin/schema-engine
+          export PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 
           if [ ! -f /var/lib/evolution-api/dist/main.js ]; then
             echo "[evolution] Cloning v${evolutionVersion}..."
