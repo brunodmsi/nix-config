@@ -75,6 +75,10 @@ in
       "dotnet-sdk-6.0.428"
       "aspnetcore-runtime-6.0.36"
     ];
+    virtualisation.podman = {
+      enable = true;
+      dockerCompat = true;
+    };
   };
 
   imports = [

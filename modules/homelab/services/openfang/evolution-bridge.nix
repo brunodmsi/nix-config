@@ -1,4 +1,4 @@
-# Evolution API built from source + bridge to OpenFang
+# Evolution API (container) + bridge to OpenFang
 {
   config,
   lib,
@@ -11,21 +11,11 @@ let
   evolutionPort = 8080;
   evolutionApiKey = "openfang-evolution-bridge";
   instanceName = "sweet-whatsapp";
-  evolutionVersion = "2.3.7";
 
-  evolutionSrc = pkgs.fetchFromGitHub {
-    owner = "EvolutionAPI";
-    repo = "evolution-api";
-    rev = "${evolutionVersion}";
-    hash = "sha256-0000000000000000000000000000000000000000000000000000";
-  };
-
-  # Bridge script
   bridgeScript = pkgs.writeShellScript "evolution-openfang-bridge" ''
     export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
 
     EVOLUTION_URL="http://127.0.0.1:${toString evolutionPort}"
-    OPENFANG_URL="http://127.0.0.1:50051"
     API_KEY="${evolutionApiKey}"
     INSTANCE="${instanceName}"
     AGENT_ID="$1"
@@ -33,7 +23,7 @@ let
     MESSAGE="$3"
     SENDER_NAME="$4"
 
-    RESPONSE=$(${pkgs.curl}/bin/curl -s -X POST "$OPENFANG_URL/api/agents/$AGENT_ID/message" \
+    RESPONSE=$(${pkgs.curl}/bin/curl -s -X POST "http://127.0.0.1:50051/api/agents/$AGENT_ID/message" \
       -H "Content-Type: application/json" \
       -d "{\"message\": $(echo "$MESSAGE" | ${pkgs.jq}/bin/jq -Rs .), \"metadata\": {\"channel\": \"whatsapp\", \"sender\": \"$SENDER\", \"sender_name\": \"$SENDER_NAME\"}}" \
       --max-time 120)
@@ -98,79 +88,53 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
-    # Evolution API from source
-    systemd.services.evolution-api = {
-      description = "Evolution API WhatsApp Gateway";
-      after = [ "network-online.target" "postgresql.service" ];
-      wants = [ "network-online.target" ];
-      requires = [ "postgresql.service" ];
+    # Build Evolution API v2.3.7 container on first run
+    systemd.services.evolution-api-build = {
+      description = "Build Evolution API container image";
       wantedBy = [ "multi-user.target" ];
-      environment = {
-        AUTHENTICATION_API_KEY = evolutionApiKey;
-        AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
-        DEL_INSTANCE = "false";
-        DATABASE_PROVIDER = "postgresql";
-        DATABASE_CONNECTION_URI = "postgresql://evolution@127.0.0.1:5432/evolution";
-        CACHE_REDIS_ENABLED = "false";
-        LOG_LEVEL = "INFO";
-        DATABASE_SAVE_DATA_INSTANCE = "true";
-        DATABASE_SAVE_DATA_NEW_MESSAGE = "true";
-        DATABASE_SAVE_MESSAGE_UPDATE = "true";
-        DATABASE_SAVE_DATA_CONTACTS = "true";
-        DATABASE_SAVE_DATA_CHATS = "true";
-        DATABASE_SAVE_DATA_LABELS = "true";
-        DATABASE_SAVE_DATA_HISTORIC = "true";
-        NODE_ENV = "production";
-        HOME = "/var/lib/evolution-api";
-        PRISMA_QUERY_ENGINE_LIBRARY = "${pkgs.prisma-engines}/lib/libquery_engine.node";
-        PRISMA_SCHEMA_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/schema-engine";
-        PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING = "1";
-      };
-      path = [ pkgs.nodejs pkgs.bash pkgs.coreutils pkgs.git ];
+      before = [ "evolution-api.service" ];
       serviceConfig = {
-        ExecStartPre = pkgs.writeShellScript "evolution-setup" ''
-          export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.gnumake}/bin:${pkgs.python3}/bin:${pkgs.openssl}/bin:$PATH
-          export HOME=/var/lib/evolution-api
-          export PRISMA_QUERY_ENGINE_LIBRARY=${pkgs.prisma-engines}/lib/libquery_engine.node
-          export PRISMA_SCHEMA_ENGINE_BINARY=${pkgs.prisma-engines}/bin/schema-engine
-          export PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
-
-          if [ ! -f /var/lib/evolution-api/src/main.ts ]; then
-            echo "[evolution] Cloning v${evolutionVersion}..."
-            ${pkgs.git}/bin/git clone --depth 1 --branch ${evolutionVersion} https://github.com/EvolutionAPI/evolution-api.git /tmp/evolution-src
-
-            echo "[evolution] Installing dependencies..."
-            cd /tmp/evolution-src
-            ${pkgs.nodejs}/bin/npm install
-
-            echo "[evolution] Copying to /var/lib/evolution-api..."
-            cp -r /tmp/evolution-src/* /var/lib/evolution-api/
-            cp /tmp/evolution-src/.env.example /var/lib/evolution-api/.env 2>/dev/null || true
-            rm -rf /tmp/evolution-src
-
-            echo "[evolution] Running migrations..."
-            cd /var/lib/evolution-api
-            DATABASE_PROVIDER=postgresql DATABASE_CONNECTION_URI="postgresql://evolution@127.0.0.1:5432/evolution" ${pkgs.nodejs}/bin/npm run db:deploy
-
-            echo "[evolution] Generating Prisma client..."
-            DATABASE_PROVIDER=postgresql DATABASE_CONNECTION_URI="postgresql://evolution@127.0.0.1:5432/evolution" ${pkgs.nodejs}/bin/npm run db:generate
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "evolution-build" ''
+          if ! ${pkgs.podman}/bin/podman image exists localhost/evolution-api:v2.3.7 2>/dev/null; then
+            echo "[evolution] Building v2.3.7 from source..."
+            ${pkgs.podman}/bin/podman build -t evolution-api:v2.3.7 https://github.com/EvolutionAPI/evolution-api.git#2.3.7
+          else
+            echo "[evolution] Image already exists"
           fi
         '';
-        ExecStart = pkgs.writeShellScript "evolution-run" ''
-          export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:$PATH
-          export HOME=/var/lib/evolution-api
-          cd /var/lib/evolution-api
-          exec ${pkgs.nodejs}/bin/npx tsx ./src/main.ts
-        '';
-        Restart = "on-failure";
-        RestartSec = 10;
-        WorkingDirectory = "/var/lib/evolution-api";
+        TimeoutStartSec = "600";
       };
     };
 
-    systemd.tmpfiles.rules = [
-      "d /var/lib/evolution-api 0750 root root - -"
-    ];
+    # Evolution API container with host networking
+    systemd.services.evolution-api = {
+      description = "Evolution API WhatsApp Gateway";
+      after = [ "network-online.target" "postgresql.service" "evolution-api-build.service" ];
+      wants = [ "network-online.target" ];
+      requires = [ "postgresql.service" "evolution-api-build.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        ExecStartPre = "${pkgs.podman}/bin/podman rm -f evolution-api 2>/dev/null || true";
+        ExecStart = ''
+          ${pkgs.podman}/bin/podman run --rm --name evolution-api \
+            --network=host \
+            -e AUTHENTICATION_API_KEY=${evolutionApiKey} \
+            -e AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true \
+            -e DEL_INSTANCE=false \
+            -e DATABASE_PROVIDER=postgresql \
+            -e "DATABASE_CONNECTION_URI=postgresql://evolution@127.0.0.1:5432/evolution" \
+            -e CACHE_REDIS_ENABLED=false \
+            -e LOG_LEVEL=INFO \
+            -v evolution_instances:/evolution/instances \
+            localhost/evolution-api:v2.3.7
+        '';
+        ExecStop = "${pkgs.podman}/bin/podman stop evolution-api";
+        Restart = "on-failure";
+        RestartSec = 10;
+      };
+    };
 
     # PostgreSQL database for Evolution
     services.postgresql = {
