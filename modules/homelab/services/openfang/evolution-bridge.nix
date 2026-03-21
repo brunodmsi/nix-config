@@ -110,7 +110,7 @@ in
         AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
         DEL_INSTANCE = "false";
         DATABASE_PROVIDER = "postgresql";
-        DATABASE_CONNECTION_URI = "postgresql://evolution:evolution@127.0.0.1:5432/evolution";
+        DATABASE_CONNECTION_URI = "postgresql://evolution@127.0.0.1:5432/evolution";
         CACHE_REDIS_ENABLED = "false";
         LOG_LEVEL = "WARN";
         PORT = toString evolutionPort;
@@ -133,6 +133,7 @@ in
       ];
       authentication = lib.mkAfter ''
         host evolution evolution 10.88.0.0/16 trust
+        host evolution evolution 127.0.0.1/32 trust
       '';
     };
 
