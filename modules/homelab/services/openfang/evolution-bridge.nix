@@ -63,7 +63,18 @@ let
 
       if [ "$EVENT" = "messages.upsert" ]; then
         FROM_ME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.fromMe // false')
-        if [ "$FROM_ME" = "false" ]; then
+        MSG_ID=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.id // empty')
+        if [ "$FROM_ME" = "false" ] && [ -n "$MSG_ID" ]; then
+          # Dedup: skip if we've seen this message ID in the last 60 seconds
+          DEDUP_DIR="/tmp/evolution-bridge-dedup"
+          mkdir -p "$DEDUP_DIR"
+          if [ -f "$DEDUP_DIR/$MSG_ID" ]; then
+            exit 0
+          fi
+          touch "$DEDUP_DIR/$MSG_ID"
+          # Clean old dedup files
+          find "$DEDUP_DIR" -mmin +1 -delete 2>/dev/null &
+
           SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
           SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
           MESSAGE=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.message.conversation // .data.message.extendedTextMessage.text // empty')
