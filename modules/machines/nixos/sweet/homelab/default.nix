@@ -68,6 +68,9 @@
       # AI Agent
       openfang = {
         enable = true;
+        llmProvider = "openai";
+        llmModel = "gpt-4o";
+        apiKeyEnvVar = "OPENAI_API_KEY";
         apiKeyFile = config.age.secrets.openfangApiKey.path;
       };
       # Monitoring
