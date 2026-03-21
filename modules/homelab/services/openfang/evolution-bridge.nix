@@ -97,6 +97,7 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "evolution-build" ''
+          export PATH=${pkgs.git}/bin:${pkgs.coreutils}/bin:$PATH
           if ! ${pkgs.podman}/bin/podman image exists localhost/evolution-api:v2.3.7 2>/dev/null; then
             echo "[evolution] Building v2.3.7 from source..."
             ${pkgs.podman}/bin/podman build -t evolution-api:v2.3.7 https://github.com/EvolutionAPI/evolution-api.git#2.3.7
