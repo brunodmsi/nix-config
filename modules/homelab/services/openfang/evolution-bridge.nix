@@ -136,6 +136,13 @@ in
       '';
     };
 
+    # Evolution API manager via Caddy
+    services.caddy.virtualHosts."http://wa-setup.${homelab.baseDomain}" = {
+      extraConfig = ''
+        reverse_proxy http://127.0.0.1:8080
+      '';
+    };
+
     # Webhook bridge service
     systemd.services.evolution-openfang-bridge = {
       description = "Evolution API to OpenFang bridge";
