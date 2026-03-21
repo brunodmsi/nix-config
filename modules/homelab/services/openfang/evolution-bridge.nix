@@ -104,7 +104,7 @@ in
   config = lib.mkIf cfg.enable {
     # Evolution API container
     virtualisation.oci-containers.containers.evolution-api = {
-      image = "atendai/evolution-api:v2.2.3";
+      image = "atendai/evolution-api:latest";
       environment = {
         AUTHENTICATION_API_KEY = evolutionApiKey;
         AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
@@ -112,7 +112,7 @@ in
         DATABASE_PROVIDER = "postgresql";
         DATABASE_CONNECTION_URI = "postgresql://evolution@127.0.0.1:5432/evolution";
         CACHE_REDIS_ENABLED = "false";
-        LOG_LEVEL = "WARN";
+        LOG_LEVEL = "INFO";
       };
       volumes = [
         "evolution_instances:/evolution/instances"
