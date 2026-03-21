@@ -70,7 +70,7 @@
       openfang = {
         enable = true;
         llmProvider = "anthropic";
-        llmModel = "claude-sonnet-4-20250514";
+        llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
         apiKeyFile = config.age.secrets.openfangApiKey.path;
       };
