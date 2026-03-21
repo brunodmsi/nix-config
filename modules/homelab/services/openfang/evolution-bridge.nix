@@ -123,6 +123,7 @@ in
 
     # PostgreSQL database for Evolution
     services.postgresql = {
+      enableTCPIP = true;
       ensureDatabases = [ "evolution" ];
       ensureUsers = [
         {
@@ -130,6 +131,9 @@ in
           ensureDBOwnership = true;
         }
       ];
+      authentication = lib.mkAfter ''
+        host evolution evolution 10.88.0.0/16 trust
+      '';
     };
 
     # Webhook bridge service
