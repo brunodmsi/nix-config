@@ -37,6 +37,10 @@ in
       type = lib.types.path;
       description = "Path to file containing the LLM API key";
     };
+    allowedSendersFile = lib.mkOption {
+      type = lib.types.path;
+      description = "Path to file with allowed WhatsApp numbers, one per line";
+    };
     whatsappGatewayPort = lib.mkOption {
       type = lib.types.int;
       default = 3009;

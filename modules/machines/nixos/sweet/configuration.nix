@@ -97,6 +97,7 @@
       nextcloudAdminPassword.file = "${inputs.secrets}/nextcloudAdminPassword.age";
       hashedUserPassword.file = "${inputs.secrets}/hashedUserPassword.age";
       openfangApiKey.file = "${inputs.secrets}/openfangApiKey.age";
+      whatsappAllowedSenders.file = "${inputs.secrets}/whatsappAllowedSenders.age";
       paperlessPassword.file = "${inputs.secrets}/paperlessPassword.age";
     };
   };

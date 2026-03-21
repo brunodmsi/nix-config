@@ -73,6 +73,7 @@
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
         apiKeyFile = config.age.secrets.openfangApiKey.path;
+        allowedSendersFile = config.age.secrets.whatsappAllowedSenders.path;
       };
       # Monitoring
       prometheus.enable = true;

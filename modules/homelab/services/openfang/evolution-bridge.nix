@@ -64,27 +64,36 @@ let
       if [ "$EVENT" = "messages.upsert" ] || [ "$EVENT" = "MESSAGES_UPSERT" ]; then
         FROM_ME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.fromMe // false')
         MSG_ID=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.id // empty')
-        echo "[bridge] Event=$EVENT fromMe=$FROM_ME msgId=$MSG_ID" >&2
-        if [ "$FROM_ME" = "false" ] && [ "$FROM_ME" != "true" ] && [ -n "$MSG_ID" ]; then
-          # Dedup: skip if we've seen this message ID in the last 60 seconds
-          DEDUP_DIR="/tmp/evolution-bridge-dedup"
-          mkdir -p "$DEDUP_DIR"
-          if [ -f "$DEDUP_DIR/$MSG_ID" ]; then
-            exit 0
-          fi
-          touch "$DEDUP_DIR/$MSG_ID"
-          # Clean old dedup files
-          find "$DEDUP_DIR" -mmin +1 -delete 2>/dev/null &
+        if [ "$FROM_ME" != "false" ] || [ -z "$MSG_ID" ]; then
+          exit 0
+        fi
 
-          SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
-          SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
-          MESSAGE=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.message.conversation // .data.message.extendedTextMessage.text // empty')
+        # Atomic dedup using flock
+        DEDUP_DIR="/var/lib/openfang/dedup"
+        mkdir -p "$DEDUP_DIR"
+        LOCK_FILE="$DEDUP_DIR/$MSG_ID"
+        exec 9>"$LOCK_FILE"
+        if ! ${pkgs.util-linux}/bin/flock -n 9; then
+          exit 0
+        fi
+        # Clean old dedup files in background
+        find "$DEDUP_DIR" -mmin +2 -delete 2>/dev/null &
 
-          if [ -n "$MESSAGE" ] && [ -n "$SENDER" ]; then
-            echo "[bridge] Message from $SENDER_NAME ($SENDER): $MESSAGE" >&2
-            AGENT_ID=$(${pkgs.curl}/bin/curl -s http://127.0.0.1:50051/api/agents | ${pkgs.jq}/bin/jq -r '.[0].id')
-            ${bridgeScript} "$AGENT_ID" "$SENDER" "$MESSAGE" "$SENDER_NAME" &
-          fi
+        SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
+        SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
+        MESSAGE=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.message.conversation // .data.message.extendedTextMessage.text // empty')
+
+        # Check allowed senders
+        ALLOWED_FILE="${cfg.allowedSendersFile}"
+        if [ -f "$ALLOWED_FILE" ] && ! grep -q "$SENDER" "$ALLOWED_FILE"; then
+          echo "[bridge] Rejected from unauthorized sender: $SENDER" >&2
+          exit 0
+        fi
+
+        if [ -n "$MESSAGE" ] && [ -n "$SENDER" ]; then
+          echo "[bridge] Message from $SENDER_NAME ($SENDER): $MESSAGE" >&2
+          AGENT_ID=$(${pkgs.curl}/bin/curl -s http://127.0.0.1:50051/api/agents | ${pkgs.jq}/bin/jq -r '.[0].id')
+          ${bridgeScript} "$AGENT_ID" "$SENDER" "$MESSAGE" "$SENDER_NAME" &
         fi
       fi
     fi
