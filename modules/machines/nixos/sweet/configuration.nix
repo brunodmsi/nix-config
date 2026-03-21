@@ -112,6 +112,9 @@
     };
   };
 
+  # Allow running dynamically linked binaries (e.g. OpenFang)
+  programs.nix-ld.enable = true;
+
   virtualisation.docker.storageDriver = "overlay2";
 
   environment.systemPackages = with pkgs; [
