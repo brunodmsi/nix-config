@@ -150,6 +150,7 @@ in
       environment = {
         PORT = toString cfg.whatsappGatewayPort;
         HOME = cfg.configDir;
+        OPENFANG_URL = "http://127.0.0.1:50051";
       };
       serviceConfig = {
         ExecStartPre = pkgs.writeShellScript "whatsapp-gateway-setup" ''
