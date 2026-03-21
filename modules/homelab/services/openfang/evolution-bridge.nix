@@ -105,20 +105,20 @@ in
     # Evolution API container
     virtualisation.oci-containers.containers.evolution-api = {
       image = "atendai/evolution-api:v2.2.3";
-      ports = [ "${toString evolutionPort}:8080" ];
       environment = {
         AUTHENTICATION_API_KEY = evolutionApiKey;
         AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
         DEL_INSTANCE = "false";
         DATABASE_PROVIDER = "postgresql";
-        DATABASE_CONNECTION_URI = "postgresql://evolution:evolution@10.88.0.1:5432/evolution";
+        DATABASE_CONNECTION_URI = "postgresql://evolution:evolution@127.0.0.1:5432/evolution";
         CACHE_REDIS_ENABLED = "false";
         LOG_LEVEL = "WARN";
+        PORT = toString evolutionPort;
       };
       volumes = [
         "evolution_instances:/evolution/instances"
       ];
-      extraOptions = [ "--add-host=host.containers.internal:host-gateway" ];
+      extraOptions = [ "--network=host" ];
     };
 
     # PostgreSQL database for Evolution
