@@ -133,26 +133,26 @@ in
             echo "[evolution] Cloning v${evolutionVersion}..."
             ${pkgs.git}/bin/git clone --depth 1 --branch ${evolutionVersion} https://github.com/EvolutionAPI/evolution-api.git /tmp/evolution-src
 
-            echo "[evolution] Installing dependencies..."
+            echo "[evolution] Installing ALL dependencies..."
             cd /tmp/evolution-src
-            ${pkgs.nodejs}/bin/npm install
+            ${pkgs.nodejs}/bin/npm install --include=dev
 
             echo "[evolution] Building..."
             ${pkgs.nodejs}/bin/npm run build
 
             echo "[evolution] Copying to /var/lib/evolution-api..."
-            mkdir -p /var/lib/evolution-api
+            rm -rf /var/lib/evolution-api/dist /var/lib/evolution-api/node_modules
             cp -r /tmp/evolution-src/dist /var/lib/evolution-api/
             cp -r /tmp/evolution-src/node_modules /var/lib/evolution-api/
             cp -r /tmp/evolution-src/prisma /var/lib/evolution-api/
-            cp -r /tmp/evolution-src/package.json /var/lib/evolution-api/
-            cp -r /tmp/evolution-src/runWithProvider.js /var/lib/evolution-api/
-            cp -r /tmp/evolution-src/.env.example /var/lib/evolution-api/.env 2>/dev/null || true
+            cp /tmp/evolution-src/package.json /var/lib/evolution-api/
+            cp /tmp/evolution-src/runWithProvider.js /var/lib/evolution-api/
+            cp /tmp/evolution-src/.env.example /var/lib/evolution-api/.env 2>/dev/null || true
             rm -rf /tmp/evolution-src
 
             echo "[evolution] Running migrations..."
             cd /var/lib/evolution-api
-            ${pkgs.nodejs}/bin/npm run db:deploy
+            DATABASE_PROVIDER=postgresql DATABASE_CONNECTION_URI="postgresql://evolution@127.0.0.1:5432/evolution" ${pkgs.nodejs}/bin/npm run db:deploy
           fi
         '';
         ExecStart = pkgs.writeShellScript "evolution-run" ''
