@@ -111,7 +111,7 @@ in
         AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
         DEL_INSTANCE = "false";
         DATABASE_PROVIDER = "postgresql";
-        DATABASE_CONNECTION_URI = "postgresql://evolution:evolution@host.containers.internal:5432/evolution";
+        DATABASE_CONNECTION_URI = "postgresql://evolution:evolution@10.88.0.1:5432/evolution";
         CACHE_REDIS_ENABLED = "false";
         LOG_LEVEL = "WARN";
       };
