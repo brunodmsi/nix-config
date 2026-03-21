@@ -75,21 +75,6 @@ in
       "dotnet-sdk-6.0.428"
       "aspnetcore-runtime-6.0.36"
     ];
-    virtualisation.podman = {
-      dockerCompat = true;
-      autoPrune.enable = true;
-      extraPackages = [ pkgs.zfs ];
-      defaultNetwork.settings = {
-        dns_enabled = true;
-      };
-    };
-    virtualisation.oci-containers = {
-      backend = "podman";
-    };
-
-    networking.firewall.interfaces.podman0.allowedUDPPorts =
-      lib.lists.optionals config.virtualisation.podman.enable
-        [ 53 ];
   };
 
   imports = [

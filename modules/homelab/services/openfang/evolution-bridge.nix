@@ -1,5 +1,4 @@
-# Bridge between Evolution API (WhatsApp) and OpenFang (AI Agent)
-# Receives webhooks from Evolution API, forwards to OpenFang, sends replies back
+# Evolution API built from source + bridge to OpenFang
 {
   config,
   lib,
@@ -12,8 +11,16 @@ let
   evolutionPort = 8080;
   evolutionApiKey = "openfang-evolution-bridge";
   instanceName = "sweet-whatsapp";
+  evolutionVersion = "2.3.7";
 
-  # Bridge script: receives Evolution webhook, forwards to OpenFang, replies via Evolution
+  evolutionSrc = pkgs.fetchFromGitHub {
+    owner = "EvolutionAPI";
+    repo = "evolution-api";
+    rev = "${evolutionVersion}";
+    hash = "sha256-0000000000000000000000000000000000000000000000000000";
+  };
+
+  # Bridge script
   bridgeScript = pkgs.writeShellScript "evolution-openfang-bridge" ''
     export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
 
@@ -26,17 +33,14 @@ let
     MESSAGE="$3"
     SENDER_NAME="$4"
 
-    # Forward to OpenFang
     RESPONSE=$(${pkgs.curl}/bin/curl -s -X POST "$OPENFANG_URL/api/agents/$AGENT_ID/message" \
       -H "Content-Type: application/json" \
       -d "{\"message\": $(echo "$MESSAGE" | ${pkgs.jq}/bin/jq -Rs .), \"metadata\": {\"channel\": \"whatsapp\", \"sender\": \"$SENDER\", \"sender_name\": \"$SENDER_NAME\"}}" \
       --max-time 120)
 
-    # Extract response text
     REPLY=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.response // .message // .text // empty')
 
     if [ -n "$REPLY" ] && [ "$REPLY" != "null" ]; then
-      # Send reply via Evolution API
       ${pkgs.curl}/bin/curl -s -X POST "$EVOLUTION_URL/message/sendText/$INSTANCE" \
         -H "Content-Type: application/json" \
         -H "apikey: $API_KEY" \
@@ -44,21 +48,9 @@ let
     fi
   '';
 
-  # Webhook receiver: lightweight HTTP server that receives Evolution webhooks
-  webhookReceiver = pkgs.writeShellScript "evolution-webhook-receiver" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.socat}/bin:$PATH
-
-    echo "[bridge] Evolution-OpenFang bridge listening on port 3010"
-
-    while true; do
-      ${pkgs.socat}/bin/socat TCP-LISTEN:3010,reuseaddr,fork EXEC:"${webhookHandler}"
-    done
-  '';
-
   webhookHandler = pkgs.writeShellScript "evolution-webhook-handler" ''
     export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
 
-    # Read HTTP request
     read -r REQUEST_LINE
     CONTENT_LENGTH=0
     while IFS= read -r header; do
@@ -74,15 +66,12 @@ let
       BODY=$(head -c "$CONTENT_LENGTH")
     fi
 
-    # Respond immediately
     echo -e "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4\r\n\r\n{\"ok\":true}"
 
-    # Process in background
     if [ -n "$BODY" ]; then
       EVENT=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.event // empty')
 
       if [ "$EVENT" = "messages.upsert" ]; then
-        # Extract message details
         FROM_ME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.fromMe // false')
         if [ "$FROM_ME" = "false" ]; then
           SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
@@ -91,7 +80,6 @@ let
 
           if [ -n "$MESSAGE" ] && [ -n "$SENDER" ]; then
             echo "[bridge] Message from $SENDER_NAME ($SENDER): $MESSAGE" >&2
-            # Get agent ID
             AGENT_ID=$(${pkgs.curl}/bin/curl -s http://127.0.0.1:50051/api/agents | ${pkgs.jq}/bin/jq -r '.[0].id')
             ${bridgeScript} "$AGENT_ID" "$SENDER" "$MESSAGE" "$SENDER_NAME" &
           fi
@@ -99,12 +87,24 @@ let
       fi
     fi
   '';
+
+  webhookReceiver = pkgs.writeShellScript "evolution-webhook-receiver" ''
+    export PATH=${pkgs.coreutils}/bin:${pkgs.socat}/bin:$PATH
+    echo "[bridge] Evolution-OpenFang bridge listening on port 3010"
+    while true; do
+      ${pkgs.socat}/bin/socat TCP-LISTEN:3010,reuseaddr,fork EXEC:"${webhookHandler}"
+    done
+  '';
 in
 {
   config = lib.mkIf cfg.enable {
-    # Evolution API container
-    virtualisation.oci-containers.containers.evolution-api = {
-      image = "atendai/evolution-api:v2.3.7";
+    # Evolution API from source
+    systemd.services.evolution-api = {
+      description = "Evolution API WhatsApp Gateway";
+      after = [ "network-online.target" "postgresql.service" ];
+      wants = [ "network-online.target" ];
+      requires = [ "postgresql.service" ];
+      wantedBy = [ "multi-user.target" ];
       environment = {
         AUTHENTICATION_API_KEY = evolutionApiKey;
         AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
@@ -113,12 +113,63 @@ in
         DATABASE_CONNECTION_URI = "postgresql://evolution@127.0.0.1:5432/evolution";
         CACHE_REDIS_ENABLED = "false";
         LOG_LEVEL = "INFO";
+        DATABASE_SAVE_DATA_INSTANCE = "true";
+        DATABASE_SAVE_DATA_NEW_MESSAGE = "true";
+        DATABASE_SAVE_MESSAGE_UPDATE = "true";
+        DATABASE_SAVE_DATA_CONTACTS = "true";
+        DATABASE_SAVE_DATA_CHATS = "true";
+        DATABASE_SAVE_DATA_LABELS = "true";
+        DATABASE_SAVE_DATA_HISTORIC = "true";
+        NODE_ENV = "production";
+        HOME = "/var/lib/evolution-api";
       };
-      volumes = [
-        "evolution_instances:/evolution/instances"
-      ];
-      extraOptions = [ "--network=host" ];
+      path = [ pkgs.nodejs pkgs.bash pkgs.coreutils pkgs.git ];
+      serviceConfig = {
+        ExecStartPre = pkgs.writeShellScript "evolution-setup" ''
+          export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.gnumake}/bin:${pkgs.python3}/bin:$PATH
+          export HOME=/var/lib/evolution-api
+
+          if [ ! -f /var/lib/evolution-api/dist/main.js ]; then
+            echo "[evolution] Cloning v${evolutionVersion}..."
+            ${pkgs.git}/bin/git clone --depth 1 --branch ${evolutionVersion} https://github.com/EvolutionAPI/evolution-api.git /tmp/evolution-src
+
+            echo "[evolution] Installing dependencies..."
+            cd /tmp/evolution-src
+            ${pkgs.nodejs}/bin/npm install
+
+            echo "[evolution] Building..."
+            ${pkgs.nodejs}/bin/npm run build
+
+            echo "[evolution] Copying to /var/lib/evolution-api..."
+            mkdir -p /var/lib/evolution-api
+            cp -r /tmp/evolution-src/dist /var/lib/evolution-api/
+            cp -r /tmp/evolution-src/node_modules /var/lib/evolution-api/
+            cp -r /tmp/evolution-src/prisma /var/lib/evolution-api/
+            cp -r /tmp/evolution-src/package.json /var/lib/evolution-api/
+            cp -r /tmp/evolution-src/runWithProvider.js /var/lib/evolution-api/
+            cp -r /tmp/evolution-src/.env.example /var/lib/evolution-api/.env 2>/dev/null || true
+            rm -rf /tmp/evolution-src
+
+            echo "[evolution] Running migrations..."
+            cd /var/lib/evolution-api
+            ${pkgs.nodejs}/bin/npm run db:deploy
+          fi
+        '';
+        ExecStart = pkgs.writeShellScript "evolution-run" ''
+          export PATH=${pkgs.nodejs}/bin:${pkgs.bash}/bin:${pkgs.coreutils}/bin:$PATH
+          export HOME=/var/lib/evolution-api
+          cd /var/lib/evolution-api
+          exec ${pkgs.nodejs}/bin/node dist/main.js
+        '';
+        Restart = "on-failure";
+        RestartSec = 10;
+        WorkingDirectory = "/var/lib/evolution-api";
+      };
     };
+
+    systemd.tmpfiles.rules = [
+      "d /var/lib/evolution-api 0750 root root - -"
+    ];
 
     # PostgreSQL database for Evolution
     services.postgresql = {
@@ -139,7 +190,7 @@ in
     # Evolution API manager via Caddy
     services.caddy.virtualHosts."http://wa-setup.${homelab.baseDomain}" = {
       extraConfig = ''
-        reverse_proxy http://127.0.0.1:8080
+        reverse_proxy http://127.0.0.1:${toString evolutionPort}
       '';
     };
 
