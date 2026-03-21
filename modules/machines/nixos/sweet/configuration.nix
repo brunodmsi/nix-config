@@ -112,6 +112,12 @@
     };
   };
 
+  # Ollama for local LLM inference (uses 3060 Ti GPU)
+  services.ollama = {
+    enable = true;
+    acceleration = "cuda";
+  };
+
   # Allow running dynamically linked binaries (e.g. OpenFang)
   programs.nix-ld.enable = true;
 

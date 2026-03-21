@@ -69,10 +69,10 @@
       # AI Agent
       openfang = {
         enable = true;
-        llmProvider = "anthropic";
-        llmModel = "claude-haiku-4-5-20251001";
-        apiKeyEnvVar = "ANTHROPIC_API_KEY";
-        apiKeyFile = config.age.secrets.openfangApiKey.path;
+        llmProvider = "ollama";
+        llmModel = "qwen2.5:7b";
+        apiKeyEnvVar = "OLLAMA_DUMMY";
+        apiKeyFile = config.age.secrets.openfangApiKey.path; # unused but required by module
       };
       # Monitoring
       prometheus.enable = true;
