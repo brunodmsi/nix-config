@@ -77,11 +77,13 @@ in
       description = "Install/update OpenFang binary";
       wantedBy = [ "multi-user.target" ];
       before = [ "openfang.service" ];
+      environment.HOME = cfg.configDir;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "openfang-install" ''
-          export PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:$PATH
+          export PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.findutils}/bin:$PATH
+          export HOME=${cfg.configDir}
           if [ ! -f ${cfg.dataDir}/bin/openfang ]; then
             mkdir -p ${cfg.dataDir}/bin
             ${pkgs.curl}/bin/curl -fsSL https://openfang.sh/install | OPENFANG_INSTALL_DIR=${cfg.dataDir}/bin ${pkgs.bash}/bin/bash
