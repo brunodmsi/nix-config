@@ -9,7 +9,7 @@
 let
   homelab = config.homelab;
   cfg = homelab.services.openfang;
-  evolutionPort = 8084;
+  evolutionPort = 8080;
   evolutionApiKey = "openfang-evolution-bridge";
   instanceName = "sweet-whatsapp";
 
@@ -113,7 +113,6 @@ in
         DATABASE_CONNECTION_URI = "postgresql://evolution@127.0.0.1:5432/evolution";
         CACHE_REDIS_ENABLED = "false";
         LOG_LEVEL = "WARN";
-        PORT = toString evolutionPort;
       };
       volumes = [
         "evolution_instances:/evolution/instances"
