@@ -104,7 +104,7 @@ in
   config = lib.mkIf cfg.enable {
     # Evolution API container
     virtualisation.oci-containers.containers.evolution-api = {
-      image = "atendai/evolution-api:latest";
+      image = "atendai/evolution-api:v2.3.7";
       environment = {
         AUTHENTICATION_API_KEY = evolutionApiKey;
         AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES = "true";
