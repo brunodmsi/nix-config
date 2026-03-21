@@ -81,9 +81,10 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "openfang-install" ''
+          export PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:$PATH
           if [ ! -f ${cfg.dataDir}/bin/openfang ]; then
             mkdir -p ${cfg.dataDir}/bin
-            ${pkgs.curl}/bin/curl -fsSL https://openfang.sh/install | OPENFANG_INSTALL_DIR=${cfg.dataDir}/bin sh
+            ${pkgs.curl}/bin/curl -fsSL https://openfang.sh/install | OPENFANG_INSTALL_DIR=${cfg.dataDir}/bin ${pkgs.bash}/bin/bash
           fi
         '';
       };
