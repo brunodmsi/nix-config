@@ -84,9 +84,8 @@ in
         ExecStart = pkgs.writeShellScript "openfang-install" ''
           export PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.findutils}/bin:$PATH
           export HOME=${cfg.configDir}
-          if [ ! -f ${cfg.dataDir}/bin/openfang ]; then
-            mkdir -p ${cfg.dataDir}/bin
-            ${pkgs.curl}/bin/curl -fsSL https://openfang.sh/install | OPENFANG_INSTALL_DIR=${cfg.dataDir}/bin ${pkgs.bash}/bin/bash
+          if [ ! -f ${cfg.configDir}/.openfang/bin/openfang ]; then
+            ${pkgs.curl}/bin/curl -fsSL https://openfang.sh/install | ${pkgs.bash}/bin/bash
           fi
         '';
       };
@@ -124,7 +123,7 @@ in
       serviceConfig = {
         ExecStart = pkgs.writeShellScript "openfang-run" ''
           export ${cfg.apiKeyEnvVar}=$(cat ${cfg.apiKeyFile})
-          exec ${cfg.dataDir}/bin/openfang serve
+          exec ${cfg.configDir}/.openfang/bin/openfang serve
         '';
         Restart = "on-failure";
         RestartSec = 10;
@@ -135,21 +134,29 @@ in
     # WhatsApp Web Gateway (Node.js)
     systemd.services.openfang-whatsapp-gateway = {
       description = "OpenFang WhatsApp Web Gateway";
-      after = [ "network-online.target" ];
+      after = [ "network-online.target" "openfang-install.service" ];
       wants = [ "network-online.target" ];
+      requires = [ "openfang-install.service" ];
       wantedBy = [ "multi-user.target" ];
       environment = {
         PORT = toString cfg.whatsappGatewayPort;
+        HOME = cfg.configDir;
       };
       serviceConfig = {
-        ExecStart = pkgs.writeShellScript "whatsapp-gateway-run" ''
-          if [ ! -d ${cfg.dataDir}/whatsapp-gateway ]; then
-            ${pkgs.git}/bin/git clone https://github.com/RightNow-AI/openfang.git /tmp/openfang-src
-            cp -r /tmp/openfang-src/packages/whatsapp-gateway ${cfg.dataDir}/whatsapp-gateway
-            rm -rf /tmp/openfang-src
-            cd ${cfg.dataDir}/whatsapp-gateway
-            ${pkgs.nodejs}/bin/npm install
+        ExecStartPre = pkgs.writeShellScript "whatsapp-gateway-setup" ''
+          export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.nodejs}/bin:$PATH
+          if [ ! -d ${cfg.dataDir}/whatsapp-gateway/node_modules ]; then
+            mkdir -p ${cfg.dataDir}/whatsapp-gateway
+            ${pkgs.git}/bin/git clone --depth 1 https://github.com/RightNow-AI/openfang.git /tmp/openfang-src || true
+            if [ -d /tmp/openfang-src/packages/whatsapp-gateway ]; then
+              cp -r /tmp/openfang-src/packages/whatsapp-gateway/* ${cfg.dataDir}/whatsapp-gateway/
+              rm -rf /tmp/openfang-src
+              cd ${cfg.dataDir}/whatsapp-gateway
+              ${pkgs.nodejs}/bin/npm install --production
+            fi
           fi
+        '';
+        ExecStart = pkgs.writeShellScript "whatsapp-gateway-run" ''
           cd ${cfg.dataDir}/whatsapp-gateway
           exec ${pkgs.nodejs}/bin/node index.js
         '';
