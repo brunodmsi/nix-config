@@ -65,6 +65,11 @@
         enable = true;
         passwordFile = config.age.secrets.paperlessPassword.path;
       };
+      # AI Agent
+      openfang = {
+        enable = true;
+        apiKeyFile = config.age.secrets.openfangApiKey.path;
+      };
       # Monitoring
       prometheus.enable = true;
       grafana.enable = true;
@@ -130,6 +135,8 @@
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/postgresql/ /mnt/data1/Backups/var-lib/postgresql/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/immich/ /mnt/data1/Backups/var-lib/immich/
         ${pkgs.rsync}/bin/rsync -a --delete /var/lib/paperless/ /mnt/data1/Backups/var-lib/paperless/
+        ${pkgs.rsync}/bin/rsync -a --delete /var/lib/openfang/ /mnt/data1/Backups/var-lib/openfang/
+        ${pkgs.rsync}/bin/rsync -a --delete /persist/openfang/ /mnt/data1/Backups/persist/openfang/
       '';
     };
   };

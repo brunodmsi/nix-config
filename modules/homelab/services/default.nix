@@ -108,6 +108,7 @@ in
     ./monitoring/prometheus
     ./monitoring/grafana
     ./nextcloud
+    ./openfang
     ./paperless-ngx
     ./uptime-kuma
     ./vaultwarden
