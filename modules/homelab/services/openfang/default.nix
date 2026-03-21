@@ -121,9 +121,20 @@ in
         OPENFANG_CONFIG = "/etc/openfang/config.toml";
       };
       serviceConfig = {
+        ExecStartPre = pkgs.writeShellScript "openfang-init" ''
+          export ${cfg.apiKeyEnvVar}=$(cat ${cfg.apiKeyFile})
+          export HOME=${cfg.configDir}
+          export OPENFANG_CONFIG=/etc/openfang/config.toml
+          if [ ! -f ${cfg.configDir}/.openfang/config.toml ]; then
+            ${cfg.configDir}/.openfang/bin/openfang init --non-interactive || true
+          fi
+          # Overwrite with our config
+          cp /etc/openfang/config.toml ${cfg.configDir}/.openfang/config.toml
+        '';
         ExecStart = pkgs.writeShellScript "openfang-run" ''
           export ${cfg.apiKeyEnvVar}=$(cat ${cfg.apiKeyFile})
-          exec ${cfg.configDir}/.openfang/bin/openfang serve
+          export HOME=${cfg.configDir}
+          exec ${cfg.configDir}/.openfang/bin/openfang start --foreground
         '';
         Restart = "on-failure";
         RestartSec = 10;
