@@ -61,10 +61,11 @@ let
     if [ -n "$BODY" ]; then
       EVENT=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.event // empty')
 
-      if [ "$EVENT" = "messages.upsert" ]; then
+      if [ "$EVENT" = "messages.upsert" ] || [ "$EVENT" = "MESSAGES_UPSERT" ]; then
         FROM_ME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.fromMe // false')
         MSG_ID=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.id // empty')
-        if [ "$FROM_ME" = "false" ] && [ -n "$MSG_ID" ]; then
+        echo "[bridge] Event=$EVENT fromMe=$FROM_ME msgId=$MSG_ID" >&2
+        if [ "$FROM_ME" = "false" ] && [ "$FROM_ME" != "true" ] && [ -n "$MSG_ID" ]; then
           # Dedup: skip if we've seen this message ID in the last 60 seconds
           DEDUP_DIR="/tmp/evolution-bridge-dedup"
           mkdir -p "$DEDUP_DIR"
