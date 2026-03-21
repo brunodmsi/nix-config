@@ -68,9 +68,9 @@
       # AI Agent
       openfang = {
         enable = true;
-        llmProvider = "openai";
-        llmModel = "gpt-4.1-mini";
-        apiKeyEnvVar = "OPENAI_API_KEY";
+        llmProvider = "anthropic";
+        llmModel = "claude-sonnet-4-20250514";
+        apiKeyEnvVar = "ANTHROPIC_API_KEY";
         apiKeyFile = config.age.secrets.openfangApiKey.path;
       };
       # Monitoring
