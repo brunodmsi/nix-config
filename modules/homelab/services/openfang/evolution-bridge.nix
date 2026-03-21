@@ -151,6 +151,9 @@ in
             echo "[evolution] Running migrations..."
             cd /var/lib/evolution-api
             DATABASE_PROVIDER=postgresql DATABASE_CONNECTION_URI="postgresql://evolution@127.0.0.1:5432/evolution" ${pkgs.nodejs}/bin/npm run db:deploy
+
+            echo "[evolution] Generating Prisma client..."
+            DATABASE_PROVIDER=postgresql DATABASE_CONNECTION_URI="postgresql://evolution@127.0.0.1:5432/evolution" ${pkgs.nodejs}/bin/npm run db:generate
           fi
         '';
         ExecStart = pkgs.writeShellScript "evolution-run" ''
