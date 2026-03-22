@@ -68,13 +68,12 @@ let
           exit 0
         fi
 
-        # Atomic dedup using mkdir (atomic on all filesystems)
-        DEDUP_DIR="/var/lib/openfang/dedup"
-        if ! mkdir "$DEDUP_DIR/$MSG_ID" 2>/dev/null; then
+        # PostgreSQL dedup — permanent, atomic
+        ALREADY=$(${pkgs.postgresql}/bin/psql -t -A -c "SELECT 1 FROM processed_messages WHERE msg_id='$MSG_ID'" postgresql://evolution@127.0.0.1:5432/evolution 2>/dev/null)
+        if [ "$ALREADY" = "1" ]; then
           exit 0
         fi
-        # Clean old dedup dirs after 24h
-        find "$DEDUP_DIR" -maxdepth 1 -type d -mmin +1440 -exec rmdir {} \; 2>/dev/null &
+        ${pkgs.postgresql}/bin/psql -c "INSERT INTO processed_messages (msg_id) VALUES ('$MSG_ID') ON CONFLICT DO NOTHING" postgresql://evolution@127.0.0.1:5432/evolution 2>/dev/null
 
         SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
         SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
@@ -169,6 +168,21 @@ in
         host evolution evolution 10.88.0.0/16 trust
         host evolution evolution 127.0.0.1/32 trust
       '';
+    };
+
+    # Create dedup table
+    systemd.services.evolution-dedup-init = {
+      description = "Create processed_messages table for dedup";
+      after = [ "postgresql.service" ];
+      requires = [ "postgresql.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "evolution-dedup-init" ''
+          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS processed_messages (msg_id TEXT PRIMARY KEY, processed_at TIMESTAMP DEFAULT NOW());" postgresql://evolution@127.0.0.1:5432/evolution
+        '';
+      };
     };
 
     # Evolution API manager via Caddy
