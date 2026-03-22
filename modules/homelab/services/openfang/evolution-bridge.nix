@@ -73,8 +73,8 @@ let
         if ! mkdir "$DEDUP_DIR/$MSG_ID" 2>/dev/null; then
           exit 0
         fi
-        # Clean old dedup dirs in background
-        find "$DEDUP_DIR" -maxdepth 1 -type d -mmin +2 -exec rmdir {} \; 2>/dev/null &
+        # Clean old dedup dirs after 24h
+        find "$DEDUP_DIR" -maxdepth 1 -type d -mmin +1440 -exec rmdir {} \; 2>/dev/null &
 
         SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
         SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
