@@ -1,32 +1,29 @@
-# OpenFang + WhatsApp Status
+# OpenFang + WhatsApp — WORKING
 
-## What works
-- OpenFang agent running on port 50051 with Claude Sonnet 4
-- Agent responds to API calls (tool calling, conversations)
-- Evolution API PostgreSQL database set up and migrated
+## Architecture
+```
+WhatsApp ←→ Evolution API v2.3.7 (container) ←→ Bridge (socat) ←→ OpenFang ←→ Claude Haiku 4.5
+                    port 8080                      port 3010         port 50051
+```
 
-## What doesn't work
-- **WhatsApp sending via Baileys (OpenFang gateway)** — Baileys can receive but sock.sendMessage() times out
-- **WhatsApp QR via Evolution API v2.2.3 Docker** — connects to WhatsApp servers but never generates QR
-- **Evolution API v2.3.7 from source** — Prisma engine incompatible with NixOS, can't generate client
+## Components
+- **OpenFang**: AI agent, port 50051, binary at /persist/openfang/.openfang/bin/openfang
+- **Evolution API**: WhatsApp gateway, v2.3.7 built from source as podman container, port 8080
+- **Bridge**: socat webhook receiver on port 3010, forwards messages between Evolution and OpenFang
+- **LLM**: Claude Haiku 4.5 (Anthropic API)
 
-## Next session plan
+## Features
+- Dedup: atomic mkdir prevents duplicate message processing
+- Allowed senders: agenix secret with approved phone numbers
+- Manager UI: https://wa-setup.demasi.dev/manager/ (behind Authelia)
+- Instance name: sweet-zap
 
-### Option A: Build Evolution v2.3.7 as container (recommended)
-1. Re-enable podman (minimal config, just for Evolution)
-2. Build v2.3.7 from source using their Dockerfile: `podman build -t evolution-api:v2.3.7 https://github.com/EvolutionAPI/evolution-api.git#2.3.7`
-3. Run with --network=host
-4. This gets us v2.3.7 (newer Baileys) in a container (Prisma works fine in container)
+## Key files
+- `/Users/brunodemasi/pers/nix-config/modules/homelab/services/openfang/default.nix` — OpenFang service
+- `/Users/brunodemasi/pers/nix-config/modules/homelab/services/openfang/evolution-bridge.nix` — Evolution + bridge
+- `/persist/openfang/` — OpenFang config (survives immutable root)
+- `/var/lib/openfang/dedup/` — message dedup state
 
-### Option B: Use n8n/make.com as WhatsApp bridge
-- External service that handles WhatsApp connection
-- Webhooks to/from OpenFang
-
-### Option C: Wait for Meta Business approval
-- Appeal Meta suspension
-- Use official WhatsApp Cloud API (no Baileys needed)
-
-## Files to clean up
-- Remove the from-source Evolution setup (it doesn't work on NixOS)
-- evolution-bridge.nix needs to go back to container approach or be removed
-- Remove /var/lib/evolution-api on server (failed source install)
+## Phone number format
+Evolution strips a digit: real number 5591984519877 becomes 559184519877 in webhooks.
+Allowed senders file must use the Evolution format (559184519877).
