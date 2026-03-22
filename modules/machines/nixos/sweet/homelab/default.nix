@@ -26,7 +26,16 @@
       jellyfin.enable = true;
       homepage = {
         enable = true;
-        misc = [ ];
+        misc = [
+          {
+            "Evolution Manager" = {
+              description = "WhatsApp Gateway";
+              href = "https://wa-setup.demasi.dev";
+              siteMonitor = "https://wa-setup.demasi.dev/manager";
+              icon = "whatsapp.svg";
+            };
+          }
+        ];
       };
       authelia = {
         enable = true;
