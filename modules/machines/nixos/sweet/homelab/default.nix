@@ -41,6 +41,7 @@
           "http://grafana.demasi.dev"
           "http://prometheus.demasi.dev"
           "http://wa-setup.demasi.dev"
+          "http://agent.demasi.dev"
         ];
       };
       # Arr stack
