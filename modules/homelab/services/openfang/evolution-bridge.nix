@@ -180,7 +180,10 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "evolution-dedup-init" ''
-          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS processed_messages (msg_id TEXT PRIMARY KEY, processed_at TIMESTAMP DEFAULT NOW());" postgresql://evolution@127.0.0.1:5432/evolution
+          DB="postgresql://evolution@127.0.0.1:5432/evolution"
+          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS processed_messages (msg_id TEXT PRIMARY KEY, processed_at TIMESTAMP DEFAULT NOW());" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS channel_users (id SERIAL PRIMARY KEY, channel TEXT NOT NULL, channel_user_id TEXT NOT NULL, display_name TEXT, created_at TIMESTAMP DEFAULT NOW(), UNIQUE(channel, channel_user_id));" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS media_requests (id SERIAL PRIMARY KEY, jellyseerr_request_id TEXT, tmdb_id TEXT, title TEXT, media_type TEXT, channel_user_id INTEGER REFERENCES channel_users(id), status TEXT DEFAULT 'pending', requested_at TIMESTAMP DEFAULT NOW());" "$DB"
         '';
       };
     };

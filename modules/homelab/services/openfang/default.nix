@@ -9,7 +9,7 @@ let
   cfg = homelab.services.openfang;
 in
 {
-  imports = [ ./evolution-bridge.nix ];
+  imports = [ ./evolution-bridge.nix ./jellyseerr-bridge.nix ];
 
   options.homelab.services.openfang = {
     enable = lib.mkEnableOption "OpenFang AI Agent";
@@ -41,6 +41,17 @@ in
       type = lib.types.path;
       description = "Path to file with allowed WhatsApp numbers, one per line";
     };
+    jellyseerr = {
+      enable = lib.mkEnableOption "Jellyseerr WhatsApp integration";
+      apiKeyFile = lib.mkOption {
+        type = lib.types.path;
+        description = "Path to file containing the Jellyseerr API key";
+      };
+      webhookPort = lib.mkOption {
+        type = lib.types.int;
+        default = 3011;
+      };
+    };
     whatsappGatewayPort = lib.mkOption {
       type = lib.types.int;
       default = 3009;
@@ -63,7 +74,7 @@ in
     };
     homepage.icon = lib.mkOption {
       type = lib.types.str;
-      default = "robot.svg";
+      default = "mdi-robot-happy-outline";
     };
     homepage.category = lib.mkOption {
       type = lib.types.str;
