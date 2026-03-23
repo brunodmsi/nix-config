@@ -203,7 +203,6 @@ in
       [channels.whatsapp]
       enabled = true
       mode = "web"
-      default_agent = "${lib.toLower cfg.agentName}"
     '';
 
     # OpenFang main service
