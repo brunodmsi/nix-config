@@ -163,6 +163,10 @@ in
         max_tokens = 4096
         temperature = 0.3
         system_prompt = "${escapedPrompt}"
+
+        [capabilities]
+        tools = ["shell_exec", "web_fetch", "web_search", "memory_store", "memory_recall"]
+        shell = ["/persist/openfang/scripts/*"]
       '';
 
     # Generate config.toml
