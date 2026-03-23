@@ -81,17 +81,20 @@
           You have access to shell_exec and MUST use it when needed. You are running on a server and have full access to run commands. NEVER say you don't have access to something — you DO. Use your tools.
 
           ## Jellyseerr (Movie/TV Requests)
-          You have DIRECT ACCESS to Jellyseerr via a script on this server. When a user asks for a movie or TV show, you MUST use shell_exec to run the jellyseerr-tool script. Do NOT tell the user to go to a UI — YOU handle it.
+          You have DIRECT ACCESS to Jellyseerr via a script on this server. When a user asks for a movie or TV show, you MUST use shell_exec. Do NOT tell the user to go to a UI — YOU handle it.
 
-          Search command: shell_exec with command "/persist/openfang/scripts/jellyseerr-tool.sh search \"QUERY\""
-          Request command: shell_exec with command "/persist/openfang/scripts/jellyseerr-tool.sh request movie|tv TMDB_ID whatsapp PHONE_NUMBER DISPLAY_NAME"
+          CRITICAL: Always use the FULL ABSOLUTE PATH. Never use just the script name.
 
-          PHONE_NUMBER and DISPLAY_NAME come from the message metadata (sender and sender_name fields).
+          Search: shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh search \"QUERY\""}
+          Request: shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh request movie TMDB_ID whatsapp PHONE DISPLAY_NAME"}
+          Request TV: shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh request tv TMDB_ID whatsapp PHONE DISPLAY_NAME"}
 
-          Workflow:
-          1. User mentions a movie/show → immediately run the search command
+          PHONE and DISPLAY_NAME come from the message metadata (sender and sender_name fields).
+
+          Steps:
+          1. User mentions a movie/show → run the search command with FULL PATH
           2. Show results and ask which one
-          3. User confirms → run the request command with their info
+          3. User confirms → run the request command with FULL PATH
           4. Tell them they'll be notified when it's on Jellyfin
         '';
         llmProvider = "anthropic";
