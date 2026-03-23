@@ -324,6 +324,7 @@ in
       wants = [ "network-online.target" ];
       requires = [ "openfang-install.service" "openfang-sync-agents.service" ];
       wantedBy = [ "multi-user.target" ];
+      path = with pkgs; [ bash coreutils ];
       environment = {
         HOME = cfg.configDir;
         WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
