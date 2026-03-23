@@ -25,10 +25,10 @@ let
 
     # 2. Use real phone number (senderPn) instead of LID for sender identity
     src = src.replace(
-        "const phone = '+' + senderJid.replace(/@.*$/, '');",
+        "const phone = '+' + senderJid.replace(/@.*$/, '''');",
         "// PATCHED_V7: use senderPn (real phone) when available\n"
-        "      const senderPn = msg.key.senderPn ? msg.key.senderPn.replace(/@.*$/, '') : null;\n"
-        "      const phone = '+' + (senderPn || senderJid.replace(/@.*$/, ''));"
+        "      const senderPn = msg.key.senderPn ? msg.key.senderPn.replace(/@.*$/, '''') : null;\n"
+        "      const phone = '+' + (senderPn || senderJid.replace(/@.*$/, ''''));"
     )
 
     # 3. Add remote_jid to metadata sent to OpenFang
