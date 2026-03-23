@@ -150,6 +150,9 @@ in
       description = "${cfg.agentName} WhatsApp assistant"
       author = "bmasi"
       module = "builtin:chat"
+      system_prompt = """
+      ${cfg.systemPrompt}
+      """
 
       [model]
       provider = "${cfg.llmProvider}"
@@ -157,9 +160,6 @@ in
       api_key_env = "${cfg.apiKeyEnvVar}"
       max_tokens = 4096
       temperature = 0.3
-      system_prompt = """
-      ${cfg.systemPrompt}
-      """
     '';
 
     # Generate config.toml
@@ -265,14 +265,16 @@ in
             $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
           fi
 
-          # Update all agents with current manifest (name, model, system prompt)
+          # Kill all agents and re-spawn from manifest to apply changes
           AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
           for AGENT_ID in $AGENTS; do
-            ${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
-              -H "Content-Type: application/json" \
-              -d "{\"manifest_toml\": $(echo "$MANIFEST" | ${pkgs.jq}/bin/jq -Rs .)}"
-            echo "[sync] Updated agent $AGENT_ID"
+            echo "[sync] Killing agent $AGENT_ID for re-spawn..."
+            $OPENFANG_BIN agent kill --config "$OPENFANG_CONFIG" "$AGENT_ID" 2>/dev/null || true
           done
+
+          # Re-spawn fresh from manifest
+          echo "[sync] Spawning ${cfg.agentName} from manifest..."
+          $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
 
           # Verify
           ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[] | {id, name}'
