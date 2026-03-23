@@ -164,29 +164,9 @@ in
         temperature = 0.3
         system_prompt = "${escapedPrompt}"
 
-        [[capabilities]]
-        type = "ToolInvoke"
-        value = "shell_exec"
-
-        [[capabilities]]
-        type = "ToolInvoke"
-        value = "web_fetch"
-
-        [[capabilities]]
-        type = "ToolInvoke"
-        value = "web_search"
-
-        [[capabilities]]
-        type = "ToolInvoke"
-        value = "memory_store"
-
-        [[capabilities]]
-        type = "ToolInvoke"
-        value = "memory_recall"
-
-        [[capabilities]]
-        type = "ShellExec"
-        value = "/persist/openfang/scripts/*"
+        [capabilities]
+        tools = ["shell_exec", "web_fetch", "web_search", "memory_store", "memory_recall"]
+        shell = ["/persist/openfang/scripts/*"]
       '';
 
     # Generate config.toml
