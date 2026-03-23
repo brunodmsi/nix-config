@@ -19,6 +19,16 @@ let
     API_URL="http://127.0.0.1:5055/api/v1"
     DB="${dbUrl}"
 
+    # Normalize phone: ensure + prefix, strip spaces
+    normalize_phone() {
+      local p="$1"
+      p=$(echo "$p" | tr -d ' ')
+      case "$p" in
+        +*) echo "$p" ;;
+        *) echo "+$p" ;;
+      esac
+    }
+
     case "$1" in
       search)
         QUERY="$2"
@@ -48,10 +58,13 @@ let
         CHAN_USER="$6"    # phone number, discord ID, etc
         DISPLAY="$7"     # display name
 
+        # Normalize phone
+        CHAN_USER=$(normalize_phone "$CHAN_USER")
+
         # For movie, shift args back (no seasons arg)
         if [ "$TYPE" = "movie" ]; then
           CHANNEL="$4"
-          CHAN_USER="$5"
+          CHAN_USER=$(normalize_phone "$5")
           DISPLAY="$6"
           RESPONSE=$(curl -s -X POST "$API_URL/request" \
             -H "X-Api-Key: $API_KEY" \
@@ -103,7 +116,7 @@ let
 
       status)
         CHANNEL="$2"
-        CHAN_USER="$3"
+        CHAN_USER=$(normalize_phone "$3")
 
         RESULTS=$(psql -t -A -F'|' -c "SELECT mr.jellyseerr_request_id, mr.title, mr.media_type, mr.status FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE cu.channel = '$CHANNEL' AND cu.channel_user_id = '$CHAN_USER' ORDER BY mr.requested_at DESC LIMIT 10;" "$DB")
 
@@ -131,7 +144,7 @@ let
       delete)
         REQ_ID="$2"
         CHANNEL="$3"
-        CHAN_USER="$4"
+        CHAN_USER=$(normalize_phone "$4")
 
         # Verify ownership
         OWNER=$(psql -t -A -c "SELECT cu.channel_user_id FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE mr.jellyseerr_request_id = '$REQ_ID' AND cu.channel = '$CHANNEL' LIMIT 1;" "$DB")
