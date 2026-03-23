@@ -169,8 +169,7 @@ in
         shell = ["/persist/openfang/scripts/*"]
 
         [exec_policy]
-        mode = "allowlist"
-        allowed_commands = ["/persist/openfang/scripts/jellyseerr-tool.sh"]
+        mode = "full"
       '';
 
     # Generate config.toml
