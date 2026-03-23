@@ -242,11 +242,20 @@ let
         exit 0
       fi
 
+      # Extract TMDB ID from webhook payload
+      TMDB_ID=$(echo "$BODY" | jq -r '.media.tmdbId // empty')
+
       # Look up who requested this (include remote_jid for WhatsApp LID routing)
+      # Try by jellyseerr_request_id first, then fall back to tmdb_id
       RESULT=$(psql -t -A -F'|' -c "SELECT cu.channel, cu.channel_user_id, mr.title, cu.remote_jid FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE mr.jellyseerr_request_id = '$REQUEST_ID' LIMIT 1;" "$DB")
 
+      if [ -z "$RESULT" ] && [ -n "$TMDB_ID" ]; then
+        echo "[jellyseerr] No match by request_id $REQUEST_ID, trying tmdb_id $TMDB_ID" >&2
+        RESULT=$(psql -t -A -F'|' -c "SELECT cu.channel, cu.channel_user_id, mr.title, cu.remote_jid FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE mr.tmdb_id = '$TMDB_ID' ORDER BY mr.requested_at DESC LIMIT 1;" "$DB")
+      fi
+
       if [ -z "$RESULT" ]; then
-        echo "[jellyseerr] No channel user found for request $REQUEST_ID — skipping" >&2
+        echo "[jellyseerr] No channel user found for request $REQUEST_ID (tmdb $TMDB_ID) — skipping" >&2
         exit 0
       fi
 
