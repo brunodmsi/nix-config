@@ -39,7 +39,46 @@ let
   '';
 
   webhookHandler = pkgs.writeShellScript "evolution-webhook-handler" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:$PATH
+
+    DB="postgresql://evolution@127.0.0.1:5432/evolution"
+    OPENFANG_API="http://127.0.0.1:50051"
+
+    get_agent_id() {
+      local SENDER="$1"
+      local SENDER_NAME="$2"
+
+      # Upsert channel_users and get agent_id in one shot
+      local ROW=$(psql -t -A -F'|' -c \
+        "INSERT INTO channel_users (channel, channel_user_id, display_name) VALUES ('whatsapp', '$SENDER', '$SENDER_NAME') ON CONFLICT (channel, channel_user_id) DO UPDATE SET display_name = '$SENDER_NAME' RETURNING id, agent_id;" \
+        "$DB" 2>/dev/null)
+
+      local USER_ID=$(echo "$ROW" | cut -d'|' -f1)
+      local EXISTING_AGENT=$(echo "$ROW" | cut -d'|' -f2)
+
+      if [ -n "$EXISTING_AGENT" ]; then
+        echo "$EXISTING_AGENT"
+        return
+      fi
+
+      # Create new agent via OpenFang API
+      local MANIFEST=$(cat /etc/openfang/agent-manifest.toml)
+      local CREATE_RESP=$(curl -s -X POST "$OPENFANG_API/api/agents" \
+        -H "Content-Type: application/json" \
+        -d "{\"manifest_toml\": $(echo "$MANIFEST" | jq -Rs .)}")
+
+      local NEW_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
+
+      if [ -z "$NEW_ID" ] || [ "$NEW_ID" = "null" ]; then
+        echo "[bridge] ERROR: Failed to create agent for $SENDER: $CREATE_RESP" >&2
+        return 1
+      fi
+
+      # Store agent mapping
+      psql -c "UPDATE channel_users SET agent_id = '$NEW_ID' WHERE id = $USER_ID;" "$DB" 2>/dev/null
+      echo "[bridge] Created agent $NEW_ID for $SENDER_NAME ($SENDER)" >&2
+      echo "$NEW_ID"
+    }
 
     read -r REQUEST_LINE
     CONTENT_LENGTH=0
@@ -59,25 +98,25 @@ let
     echo -e "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4\r\n\r\n{\"ok\":true}"
 
     if [ -n "$BODY" ]; then
-      EVENT=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.event // empty')
+      EVENT=$(echo "$BODY" | jq -r '.event // empty')
 
       if [ "$EVENT" = "messages.upsert" ] || [ "$EVENT" = "MESSAGES_UPSERT" ]; then
-        FROM_ME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.fromMe // false')
-        MSG_ID=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.id // empty')
+        FROM_ME=$(echo "$BODY" | jq -r '.data.key.fromMe // false')
+        MSG_ID=$(echo "$BODY" | jq -r '.data.key.id // empty')
         if [ "$FROM_ME" != "false" ] || [ -z "$MSG_ID" ]; then
           exit 0
         fi
 
         # PostgreSQL dedup — permanent, atomic
-        ALREADY=$(${pkgs.postgresql}/bin/psql -t -A -c "SELECT 1 FROM processed_messages WHERE msg_id='$MSG_ID'" postgresql://evolution@127.0.0.1:5432/evolution 2>/dev/null)
+        ALREADY=$(psql -t -A -c "SELECT 1 FROM processed_messages WHERE msg_id='$MSG_ID'" "$DB" 2>/dev/null)
         if [ "$ALREADY" = "1" ]; then
           exit 0
         fi
-        ${pkgs.postgresql}/bin/psql -c "INSERT INTO processed_messages (msg_id) VALUES ('$MSG_ID') ON CONFLICT DO NOTHING" postgresql://evolution@127.0.0.1:5432/evolution 2>/dev/null
+        psql -c "INSERT INTO processed_messages (msg_id) VALUES ('$MSG_ID') ON CONFLICT DO NOTHING" "$DB" 2>/dev/null
 
-        SENDER=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
-        SENDER_NAME=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.pushName // "Unknown"')
-        MESSAGE=$(echo "$BODY" | ${pkgs.jq}/bin/jq -r '.data.message.conversation // .data.message.extendedTextMessage.text // empty')
+        SENDER=$(echo "$BODY" | jq -r '.data.key.remoteJid // empty' | sed 's/@.*//')
+        SENDER_NAME=$(echo "$BODY" | jq -r '.data.pushName // "Unknown"')
+        MESSAGE=$(echo "$BODY" | jq -r '.data.message.conversation // .data.message.extendedTextMessage.text // empty')
 
         # Check allowed senders
         ALLOWED_FILE="${cfg.allowedSendersFile}"
@@ -88,7 +127,11 @@ let
 
         if [ -n "$MESSAGE" ] && [ -n "$SENDER" ]; then
           echo "[bridge] Message from $SENDER_NAME ($SENDER): $MESSAGE" >&2
-          AGENT_ID=$(${pkgs.curl}/bin/curl -s http://127.0.0.1:50051/api/agents | ${pkgs.jq}/bin/jq -r '.[0].id')
+          AGENT_ID=$(get_agent_id "$SENDER" "$SENDER_NAME")
+          if [ -z "$AGENT_ID" ]; then
+            echo "[bridge] Could not get agent for $SENDER, skipping" >&2
+            exit 0
+          fi
           ${bridgeScript} "$AGENT_ID" "$SENDER" "$MESSAGE" "$SENDER_NAME" &
         fi
       fi
@@ -184,6 +227,7 @@ in
           ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS processed_messages (msg_id TEXT PRIMARY KEY, processed_at TIMESTAMP DEFAULT NOW());" "$DB"
           ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS channel_users (id SERIAL PRIMARY KEY, channel TEXT NOT NULL, channel_user_id TEXT NOT NULL, display_name TEXT, created_at TIMESTAMP DEFAULT NOW(), UNIQUE(channel, channel_user_id));" "$DB"
           ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS media_requests (id SERIAL PRIMARY KEY, jellyseerr_request_id TEXT, tmdb_id TEXT, title TEXT, media_type TEXT, channel_user_id INTEGER REFERENCES channel_users(id), status TEXT DEFAULT 'pending', requested_at TIMESTAMP DEFAULT NOW());" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "ALTER TABLE channel_users ADD COLUMN IF NOT EXISTS agent_id TEXT;" "$DB"
         '';
       };
     };

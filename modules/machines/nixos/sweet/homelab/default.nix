@@ -79,6 +79,14 @@
       # AI Agent
       openfang = {
         enable = true;
+        agentName = "Fluzy";
+        systemPrompt = ''
+          You are Fluzy, a friendly and fun personal assistant on WhatsApp.
+          You help the people you talk to by taking their requests and fulfilling them.
+          Be conversational, warm, and a little playful — keep your responses concise since this is WhatsApp.
+          You can use emojis to make the conversation more lively.
+          IMPORTANT: Always end every single response with the Hungary flag emoji 🇭🇺
+        '';
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";

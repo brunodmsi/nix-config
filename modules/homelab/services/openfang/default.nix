@@ -52,6 +52,38 @@ in
         default = 3011;
       };
     };
+    fallbackProviders = lib.mkOption {
+      type = lib.types.listOf (lib.types.submodule {
+        options = {
+          provider = lib.mkOption { type = lib.types.str; };
+          model = lib.mkOption { type = lib.types.str; };
+          apiKeyEnvVar = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+          apiKeyFile = lib.mkOption {
+            type = lib.types.path;
+            default = "/dev/null";
+            description = "Path to file containing the fallback provider API key";
+          };
+          baseUrl = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+          };
+        };
+      });
+      default = [ ];
+      description = "Fallback providers tried when the primary provider fails";
+    };
+    agentName = lib.mkOption {
+      type = lib.types.str;
+      default = "Fluzy";
+    };
+    systemPrompt = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "System prompt to define the agent's persona and behavior";
+    };
     whatsappGatewayPort = lib.mkOption {
       type = lib.types.int;
       default = 3009;
@@ -108,12 +140,40 @@ in
       };
     };
 
-    # Generate config.toml
-    environment.etc."openfang/config.toml".text = ''
+    # Agent manifest template — used by bridge to create per-user agents
+    environment.etc."openfang/agent-manifest.toml".text = ''
+      [agent]
+      name = "${cfg.agentName}"
+      system_prompt = """
+      ${cfg.systemPrompt}
+      """
+
       [default_model]
       provider = "${cfg.llmProvider}"
       model = "${cfg.llmModel}"
       api_key_env = "${cfg.apiKeyEnvVar}"
+    '';
+
+    # Generate config.toml
+    environment.etc."openfang/config.toml".text = ''
+      [agent]
+      name = "${cfg.agentName}"
+      system_prompt = """
+      ${cfg.systemPrompt}
+      """
+
+      [default_model]
+      provider = "${cfg.llmProvider}"
+      model = "${cfg.llmModel}"
+      api_key_env = "${cfg.apiKeyEnvVar}"
+
+      ${lib.concatMapStringsSep "\n" (fb: ''
+      [[fallback_providers]]
+      provider = "${fb.provider}"
+      model = "${fb.model}"
+      api_key_env = "${fb.apiKeyEnvVar}"
+      ${lib.optionalString (fb.baseUrl != "") ''base_url = "${fb.baseUrl}"''}
+      '') cfg.fallbackProviders}
 
       [memory]
       decay_rate = 0.05
@@ -148,12 +208,49 @@ in
         '';
         ExecStart = pkgs.writeShellScript "openfang-run" ''
           export ${cfg.apiKeyEnvVar}=$(cat ${cfg.apiKeyFile})
+          ${lib.concatMapStringsSep "\n" (fb: lib.optionalString (fb.apiKeyEnvVar != "" && fb.apiKeyFile != "/dev/null") ''
+          export ${fb.apiKeyEnvVar}=$(cat ${fb.apiKeyFile})
+          '') cfg.fallbackProviders}
           export HOME=${cfg.configDir}
           exec ${cfg.configDir}/.openfang/bin/openfang start --config ${cfg.configDir}/.openfang/config.toml
         '';
         Restart = "on-failure";
         RestartSec = 10;
         WorkingDirectory = cfg.dataDir;
+      };
+    };
+
+    # Sync system prompt to all per-user agents on rebuild
+    systemd.services.openfang-sync-agents = {
+      description = "Sync Fluzy persona to all OpenFang agents";
+      after = [ "openfang.service" ];
+      requires = [ "openfang.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "openfang-sync-agents" ''
+          export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
+
+          OPENFANG_API="http://127.0.0.1:50051"
+          SYSTEM_PROMPT=${lib.escapeShellArg cfg.systemPrompt}
+
+          # Wait for API readiness
+          for i in $(seq 1 30); do
+            ${pkgs.curl}/bin/curl -sf "$OPENFANG_API/api/agents" >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+          # Update all agents with current system prompt
+          AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
+
+          for AGENT_ID in $AGENTS; do
+            ${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
+              -H "Content-Type: application/json" \
+              -d "{\"system_prompt\": $(echo "$SYSTEM_PROMPT" | ${pkgs.jq}/bin/jq -Rs .), \"description\": $(echo ${lib.escapeShellArg cfg.agentName} | ${pkgs.jq}/bin/jq -Rs .)}"
+            echo "[sync] Updated agent $AGENT_ID"
+          done
+        '';
       };
     };
 
