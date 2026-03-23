@@ -26,16 +26,7 @@
       jellyfin.enable = true;
       homepage = {
         enable = true;
-        misc = [
-          {
-            "Evolution Manager" = {
-              description = "WhatsApp Gateway";
-              href = "https://wa-setup.demasi.dev";
-              siteMonitor = "https://wa-setup.demasi.dev/manager";
-              icon = "whatsapp.svg";
-            };
-          }
-        ];
+        misc = [ ];
       };
       authelia = {
         enable = true;
@@ -49,7 +40,6 @@
           "http://deluge.demasi.dev"
           "http://grafana.demasi.dev"
           "http://prometheus.demasi.dev"
-          "http://wa-setup.demasi.dev"
           "http://agent.demasi.dev"
         ];
       };
@@ -87,7 +77,6 @@
           You can use emojis to make the conversation more lively.
           IMPORTANT: Always end every single response with the Hungary flag emoji 🇭🇺
         '';
-        useNativeWhatsapp = true;
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";

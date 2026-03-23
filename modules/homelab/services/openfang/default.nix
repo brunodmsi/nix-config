@@ -84,11 +84,6 @@ in
       default = "";
       description = "System prompt to define the agent's persona and behavior";
     };
-    useNativeWhatsapp = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Use OpenFang's built-in WhatsApp Web gateway instead of Evolution API";
-    };
     whatsappGatewayPort = lib.mkOption {
       type = lib.types.int;
       default = 3009;
@@ -120,8 +115,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Node.js >= 18 required for native WhatsApp Web gateway
-    environment.systemPackages = lib.mkIf cfg.useNativeWhatsapp [ pkgs.nodejs_22 ];
+    # Node.js >= 18 required for WhatsApp Web gateway
+    environment.systemPackages = [ pkgs.nodejs_22 ];
 
     # Ensure directories exist
     systemd.tmpfiles.rules = [
@@ -191,7 +186,8 @@ in
 
       [channels.whatsapp]
       enabled = true
-      ${if cfg.useNativeWhatsapp then ''mode = "web"'' else ''gateway_url = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}"''}
+      mode = "web"
+      default_agent = "${cfg.agentName}"
     '';
 
     # OpenFang main service
@@ -204,7 +200,6 @@ in
       environment = {
         HOME = cfg.configDir;
         OPENFANG_CONFIG = "/etc/openfang/config.toml";
-      } // lib.optionalAttrs cfg.useNativeWhatsapp {
         WHATSAPP_WEB_GATEWAY_URL = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}";
       };
       serviceConfig = {
@@ -264,8 +259,8 @@ in
       };
     };
 
-    # OpenFang WhatsApp Web Gateway (native, no Evolution)
-    systemd.services.openfang-whatsapp-gateway = lib.mkIf cfg.useNativeWhatsapp {
+    # WhatsApp Web Gateway
+    systemd.services.openfang-whatsapp-gateway = {
       description = "OpenFang WhatsApp Web Gateway";
       after = [ "network-online.target" "openfang-install.service" ];
       wants = [ "network-online.target" ];
@@ -300,8 +295,6 @@ in
         RestartSec = 5;
       };
     };
-
-    # WhatsApp via Evolution API (see evolution-bridge.nix)
 
     # Caddy reverse proxy
     services.caddy.virtualHosts."http://${cfg.url}" = {

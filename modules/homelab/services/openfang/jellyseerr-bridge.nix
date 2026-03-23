@@ -9,9 +9,8 @@ let
   homelab = config.homelab;
   cfg = homelab.services.openfang;
   jsCfg = cfg.jellyseerr;
-  evolutionApiKey = "openfang-evolution-bridge";
-  instanceName = "sweet-zap";
-  dbUrl = "postgresql://evolution@127.0.0.1:5432/evolution";
+  dbUrl = "postgresql://openfang@127.0.0.1:5432/openfang";
+  gatewayUrl = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}";
 
   # Jellyseerr CLI tool for OpenFang agent
   jellyseerrTool = pkgs.writeShellScript "jellyseerr-tool" ''
@@ -139,12 +138,11 @@ let
           ;;
       esac
 
-      # Send notification on the correct channel
+      # Send notification via WhatsApp gateway
       if [ "$CHANNEL" = "whatsapp" ]; then
-        curl -s -X POST "http://127.0.0.1:8080/message/sendText/${instanceName}" \
+        curl -s -X POST "${gatewayUrl}/message/send" \
           -H "Content-Type: application/json" \
-          -H "apikey: ${evolutionApiKey}" \
-          -d "{\"number\": \"$CHAN_USER\", \"text\": $(echo "$MSG" | jq -Rs .)}" >/dev/null
+          -d "{\"to\": \"$CHAN_USER\", \"text\": $(echo "$MSG" | jq -Rs .)}" >/dev/null
         echo "[jellyseerr] Sent $NOTIF_TYPE notification to $CHAN_USER on $CHANNEL" >&2
       else
         echo "[jellyseerr] Channel '$CHANNEL' not yet supported for notifications" >&2
@@ -171,7 +169,7 @@ in
     # Jellyseerr webhook listener
     systemd.services.jellyseerr-whatsapp-bridge = {
       description = "Jellyseerr to WhatsApp notification bridge";
-      after = [ "network-online.target" "evolution-api.service" "postgresql.service" ];
+      after = [ "network-online.target" "openfang-whatsapp-gateway.service" "postgresql.service" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
