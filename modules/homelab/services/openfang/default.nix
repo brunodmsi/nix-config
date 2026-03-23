@@ -7,6 +7,42 @@
 let
   homelab = config.homelab;
   cfg = homelab.services.openfang;
+  patchScript = pkgs.writeText "patch-gateway.py" ''
+    import sys, pathlib
+    f = pathlib.Path(sys.argv[1])
+    src = f.read_text()
+    if "PATCHED_V3" in src:
+        print("[patch] Already patched")
+        sys.exit(0)
+
+    # 1. Use senderPn for DM replies instead of LID
+    src = src.replace(
+        ": remoteJid;",
+        ": (msg.key.senderPn || remoteJid);"
+    )
+
+    # 2. Add dedup + detailed logging after "const phone = " line
+    old_phone = "const pushName = msg.pushName || phone;"
+    new_phone = old_phone + """
+      // PATCHED_V3: dedup + detailed logging
+      const msgId = msg.key.id;
+      if (!globalThis._seenMsgs) globalThis._seenMsgs = new Set();
+      if (globalThis._seenMsgs.has(msgId)) { console.log('[gateway] DEDUP: skipping ' + msgId); continue; }
+      globalThis._seenMsgs.add(msgId);
+      if (globalThis._seenMsgs.size > 1000) globalThis._seenMsgs.clear();
+      console.log('[gateway] MSG ' + msgId + ' | remoteJid=' + remoteJid + ' | senderPn=' + (msg.key.senderPn || 'none') + ' | senderJid=' + senderJid + ' | phone=' + phone);"""
+
+    src = src.replace(old_phone, new_phone)
+
+    # 3. Add reply JID logging
+    src = src.replace(
+        "await sock.sendMessage(replyJid",
+        "console.log('[gateway] REPLY: sending to ' + replyJid); await sock.sendMessage(replyJid"
+    )
+
+    f.write_text(src)
+    print("[patch] Gateway patched (V3: senderPn + dedup + logging)")
+  '';
 in
 {
   imports = [ ./evolution-bridge.nix ./jellyseerr-bridge.nix ];
@@ -309,28 +345,8 @@ in
           cd "$GATEWAY_DIR"
           ${pkgs.nodejs_22}/bin/npm install --omit=dev 2>&1
 
-          # Patch gateway for LID fix + detailed logging
-          if ! grep -q "PATCHED_V2" "$GATEWAY_DIR/index.js"; then
-            echo "[patch] Applying gateway patches..."
-
-            # Use senderPn (real phone) for DM replies instead of LID
-            ${pkgs.gnused}/bin/sed -i "s|: remoteJid;|: (msg.key.senderPn \|\| remoteJid);|" "$GATEWAY_DIR/index.js"
-
-            # Add dedup + detailed logging after "const senderJid" line
-            ${pkgs.gnused}/bin/sed -i '/const phone = /a\
-      // PATCHED_V2: dedup + detailed logging\
-      const msgId = msg.key.id;\
-      if (!globalThis._seenMsgs) globalThis._seenMsgs = new Set();\
-      if (globalThis._seenMsgs.has(msgId)) { console.log(`[gateway] DEDUP: skipping already-seen msg ${msgId}`); continue; }\
-      globalThis._seenMsgs.add(msgId);\
-      if (globalThis._seenMsgs.size > 1000) globalThis._seenMsgs.clear();\
-      console.log(`[gateway] MSG ${msgId} | remoteJid=${remoteJid} | senderPn=${msg.key.senderPn || "none"} | senderJid=${senderJid} | phone=${phone}`);' "$GATEWAY_DIR/index.js"
-
-            # Add reply JID logging after replyJid is set
-            ${pkgs.gnused}/bin/sed -i 's|await sock.sendMessage(replyJid|console.log("[gateway] REPLY: sending to " + replyJid); await sock.sendMessage(replyJid|' "$GATEWAY_DIR/index.js"
-
-            echo "[patch] Gateway patched with dedup + logging"
-          fi
+          # Patch gateway for LID fix + dedup + logging
+          ${pkgs.python3}/bin/python3 ${patchScript} "$GATEWAY_DIR/index.js"
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
           export PATH=${pkgs.nodejs_22}/bin:$PATH
