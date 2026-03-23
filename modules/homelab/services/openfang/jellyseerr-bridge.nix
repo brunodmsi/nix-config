@@ -65,7 +65,7 @@ let
               -d "{\"mediaType\":\"tv\",\"mediaId\":$TMDB_ID,\"seasons\":\"all\"}")
           else
             # Convert "1,2,3" to JSON array [1,2,3]
-            SEASONS_JSON=$(echo "$SEASONS" | tr ',' '\n' | jq -s '.')
+            SEASONS_JSON="[$(echo "$SEASONS" | sed 's/,/, /g')]"
             RESPONSE=$(curl -s -X POST "$API_URL/request" \
               -H "X-Api-Key: $API_KEY" \
               -H "Content-Type: application/json" \
