@@ -309,10 +309,27 @@ in
           cd "$GATEWAY_DIR"
           ${pkgs.nodejs_22}/bin/npm install --omit=dev 2>&1
 
-          # Patch: use senderPn (real phone) for DM replies instead of LID
-          if grep -q "const senderJid = isGroup" "$GATEWAY_DIR/index.js" && ! grep -q "senderPn" "$GATEWAY_DIR/index.js"; then
-            ${pkgs.gnused}/bin/sed -i "s/: remoteJid;/: (msg.key.senderPn || remoteJid);/" "$GATEWAY_DIR/index.js"
-            echo "[patch] Patched senderJid to use senderPn for DM replies"
+          # Patch gateway for LID fix + detailed logging
+          if ! grep -q "PATCHED_V2" "$GATEWAY_DIR/index.js"; then
+            echo "[patch] Applying gateway patches..."
+
+            # Use senderPn (real phone) for DM replies instead of LID
+            ${pkgs.gnused}/bin/sed -i "s|: remoteJid;|: (msg.key.senderPn \|\| remoteJid);|" "$GATEWAY_DIR/index.js"
+
+            # Add dedup + detailed logging after "const senderJid" line
+            ${pkgs.gnused}/bin/sed -i '/const phone = /a\
+      // PATCHED_V2: dedup + detailed logging\
+      const msgId = msg.key.id;\
+      if (!globalThis._seenMsgs) globalThis._seenMsgs = new Set();\
+      if (globalThis._seenMsgs.has(msgId)) { console.log(`[gateway] DEDUP: skipping already-seen msg ${msgId}`); continue; }\
+      globalThis._seenMsgs.add(msgId);\
+      if (globalThis._seenMsgs.size > 1000) globalThis._seenMsgs.clear();\
+      console.log(`[gateway] MSG ${msgId} | remoteJid=${remoteJid} | senderPn=${msg.key.senderPn || "none"} | senderJid=${senderJid} | phone=${phone}`);' "$GATEWAY_DIR/index.js"
+
+            # Add reply JID logging before sendMessage
+            ${pkgs.gnused}/bin/sed -i 's|const replyJid = isGroup|console.log(`[gateway] REPLY: replyJid will be ${isGroup ? remoteJid : senderJid.replace(/@.*$/, "") + "@s.whatsapp.net"}`);\n          const replyJid = isGroup|' "$GATEWAY_DIR/index.js"
+
+            echo "[patch] Gateway patched with dedup + logging"
           fi
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
