@@ -251,9 +251,11 @@ in
           AGENT_COUNT=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq 'length')
           if [ "$AGENT_COUNT" = "0" ] || [ -z "$AGENT_COUNT" ]; then
             echo "[sync] No agents found, creating $AGENT_NAME..."
-            ${pkgs.curl}/bin/curl -s -X POST "$OPENFANG_API/api/agents" \
+            MANIFEST=$(cat /etc/openfang/agent-manifest.toml)
+            CREATE_RESP=$(${pkgs.curl}/bin/curl -s -X POST "$OPENFANG_API/api/agents" \
               -H "Content-Type: application/json" \
-              -d '{"manifest_toml": ""}' >/dev/null
+              -d "{\"manifest_toml\": $(echo "$MANIFEST" | ${pkgs.jq}/bin/jq -Rs .)}")
+            echo "[sync] Create response: $CREATE_RESP"
           fi
 
           # Update all agents with current name + system prompt
