@@ -11,7 +11,7 @@ let
     import sys, pathlib
     f = pathlib.Path(sys.argv[1])
     src = f.read_text()
-    if "PATCHED_V5" in src:
+    if "PATCHED_V6" in src:
         print("[patch] Already patched")
         sys.exit(0)
 
@@ -19,34 +19,22 @@ let
     lines = src.split('\n')
     for i, line in enumerate(lines):
         if 'const replyJid' in line and 's.whatsapp.net' in line:
-            lines[i] = '          const replyJid = remoteJid; // PATCHED_V5: reply to remoteJid directly'
+            lines[i] = '          const replyJid = remoteJid; // PATCHED_V6: reply to remoteJid directly'
             break
     src = '\n'.join(lines)
 
-    # 2. Add dedup + logging after pushName
-    old_push = "const pushName = msg.pushName || phone;"
-    new_push = old_push + """
-      // PATCHED_V5: dedup + logging
-      const msgId = msg.key.id;
-      if (!globalThis._seen) globalThis._seen = new Set();
-      if (globalThis._seen.has(msgId)) { console.log('[gateway] DEDUP: skipping ' + msgId); continue; }
-      globalThis._seen.add(msgId);
-      if (globalThis._seen.size > 1000) globalThis._seen.clear();
-      console.log('[gateway] MSG ' + msgId + ' | remoteJid=' + remoteJid + ' | senderPn=' + (msg.key.senderPn || 'none'));"""
-    src = src.replace(old_push, new_push)
-
-    # 3. Reply logging
+    # 2. Add remote_jid to metadata sent to OpenFang
     src = src.replace(
-        "await sock.sendMessage(replyJid",
-        "console.log('[gateway] REPLY: sending to ' + replyJid); await sock.sendMessage(replyJid"
+        "sender_name: pushName,",
+        "sender_name: pushName,\n        remote_jid: remoteJid,"
     )
 
     f.write_text(src)
-    print("[patch] Gateway patched (V5: reply to remoteJid directly + dedup)")
+    print("[patch] Gateway patched (V6: remoteJid reply + remote_jid metadata)")
   '';
 in
 {
-  imports = [ ./evolution-bridge.nix ./jellyseerr-bridge.nix ];
+  imports = [ ./evolution-bridge.nix ./jellyseerr-bridge.nix ./message-router.nix ];
 
   options.homelab.services.openfang = {
     enable = lib.mkEnableOption "OpenFang AI Agent";
@@ -278,23 +266,24 @@ in
       };
     };
 
-    # Ensure Fluzy agent exists, re-spawn on config changes
+    # On rebuild: kill all agents + clear mappings (router re-creates on next message)
     systemd.services.openfang-sync-agents = {
-      description = "Ensure ${cfg.agentName} agent exists";
-      after = [ "openfang.service" ];
-      requires = [ "openfang.service" ];
+      description = "Sync ${cfg.agentName} agents on config change";
+      after = [ "openfang.service" "postgresql.service" "openfang-db-init.service" ];
+      requires = [ "openfang.service" "postgresql.service" ];
       wantedBy = [ "multi-user.target" ];
       environment.HOME = cfg.configDir;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "openfang-sync-agents" ''
-          export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
+          export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:$PATH
           export HOME=${cfg.configDir}
 
           OPENFANG_API="http://127.0.0.1:50051"
           OPENFANG_BIN="${cfg.configDir}/.openfang/bin/openfang"
           OPENFANG_CONFIG="${cfg.configDir}/.openfang/config.toml"
+          DB="postgresql://openfang@127.0.0.1:5432/openfang"
 
           # Wait for API
           for i in $(seq 1 30); do
@@ -302,18 +291,16 @@ in
             sleep 2
           done
 
-          # Kill existing agents and re-spawn with current manifest
+          # Kill all existing agents
           AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
           for AGENT_ID in $AGENTS; do
             $OPENFANG_BIN agent kill --config "$OPENFANG_CONFIG" "$AGENT_ID" 2>/dev/null || true
+            echo "[sync] Killed agent $AGENT_ID"
           done
 
-          $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
-
-          # Write agent ID to file for gateway to use
-          AGENT_ID=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[0].id')
-          echo "$AGENT_ID" > ${cfg.dataDir}/default-agent-id
-          echo "[sync] Agent ID: $AGENT_ID"
+          # Clear agent mappings — router will re-create on next message
+          psql -c "UPDATE channel_users SET agent_id = NULL;" "$DB" 2>/dev/null
+          echo "[sync] Cleared agent mappings. Router will re-create agents with new manifest."
         '';
       };
     };
@@ -321,15 +308,15 @@ in
     # WhatsApp Web Gateway
     systemd.services.openfang-whatsapp-gateway = {
       description = "OpenFang WhatsApp Web Gateway";
-      after = [ "network-online.target" "openfang-install.service" "openfang-sync-agents.service" ];
+      after = [ "network-online.target" "openfang-install.service" "openfang-message-router.service" ];
       wants = [ "network-online.target" ];
-      requires = [ "openfang-install.service" "openfang-sync-agents.service" ];
+      requires = [ "openfang-install.service" "openfang-message-router.service" ];
       wantedBy = [ "multi-user.target" ];
       path = with pkgs; [ bash coreutils ];
       environment = {
         HOME = cfg.configDir;
         WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
-        OPENFANG_URL = "http://127.0.0.1:50051";
+        OPENFANG_URL = "http://127.0.0.1:50052";
       };
       serviceConfig = {
         Type = "simple";
@@ -347,12 +334,12 @@ in
           cd "$GATEWAY_DIR"
           ${pkgs.nodejs_22}/bin/npm install --omit=dev 2>&1
 
-          # Patch gateway for LID fix + dedup + logging
+          # Patch gateway: LID reply fix + remote_jid in metadata
           ${pkgs.python3}/bin/python3 ${patchScript} "$GATEWAY_DIR/index.js"
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
           export PATH=${pkgs.nodejs_22}/bin:$PATH
-          export OPENFANG_DEFAULT_AGENT=$(cat ${cfg.dataDir}/default-agent-id)
+          export OPENFANG_DEFAULT_AGENT=router-managed
           exec ${pkgs.nodejs_22}/bin/node ${cfg.dataDir}/whatsapp-gateway/index.js
         '';
         Restart = "on-failure";

@@ -113,8 +113,8 @@ let
         exit 0
       fi
 
-      # Look up who requested this
-      RESULT=$(psql -t -A -F'|' -c "SELECT cu.channel, cu.channel_user_id, mr.title FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE mr.jellyseerr_request_id = '$REQUEST_ID' LIMIT 1;" "$DB")
+      # Look up who requested this (include remote_jid for WhatsApp LID routing)
+      RESULT=$(psql -t -A -F'|' -c "SELECT cu.channel, cu.channel_user_id, mr.title, cu.remote_jid FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE mr.jellyseerr_request_id = '$REQUEST_ID' LIMIT 1;" "$DB")
 
       if [ -z "$RESULT" ]; then
         echo "[jellyseerr] No channel user found for request $REQUEST_ID — skipping" >&2
@@ -124,6 +124,7 @@ let
       CHANNEL=$(echo "$RESULT" | cut -d'|' -f1)
       CHAN_USER=$(echo "$RESULT" | cut -d'|' -f2)
       TITLE=$(echo "$RESULT" | cut -d'|' -f3)
+      REMOTE_JID=$(echo "$RESULT" | cut -d'|' -f4)
       [ -z "$TITLE" ] && TITLE="$SUBJECT"
 
       # Format message based on event
@@ -145,12 +146,16 @@ let
           ;;
       esac
 
-      # Send notification via WhatsApp gateway
+      # Send notification via WhatsApp gateway (use remote_jid for LID routing)
       if [ "$CHANNEL" = "whatsapp" ]; then
+        SEND_TO="$CHAN_USER"
+        if [ -n "$REMOTE_JID" ]; then
+          SEND_TO="$REMOTE_JID"
+        fi
         curl -s -X POST "${gatewayUrl}/message/send" \
           -H "Content-Type: application/json" \
-          -d "{\"to\": \"$CHAN_USER\", \"text\": $(echo "$MSG" | jq -Rs .)}" >/dev/null
-        echo "[jellyseerr] Sent $NOTIF_TYPE notification to $CHAN_USER on $CHANNEL" >&2
+          -d "{\"to\": \"$SEND_TO\", \"text\": $(echo "$MSG" | jq -Rs .)}" >/dev/null
+        echo "[jellyseerr] Sent $NOTIF_TYPE notification to $SEND_TO on $CHANNEL" >&2
       else
         echo "[jellyseerr] Channel '$CHANNEL' not yet supported for notifications" >&2
       fi

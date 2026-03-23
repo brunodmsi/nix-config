@@ -41,6 +41,8 @@ in
           DB="${dbUrl}"
           ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS channel_users (id SERIAL PRIMARY KEY, channel TEXT NOT NULL, channel_user_id TEXT NOT NULL, display_name TEXT, created_at TIMESTAMP DEFAULT NOW(), UNIQUE(channel, channel_user_id));" "$DB"
           ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS media_requests (id SERIAL PRIMARY KEY, jellyseerr_request_id TEXT, tmdb_id TEXT, title TEXT, media_type TEXT, channel_user_id INTEGER REFERENCES channel_users(id), status TEXT DEFAULT 'pending', requested_at TIMESTAMP DEFAULT NOW());" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "ALTER TABLE channel_users ADD COLUMN IF NOT EXISTS agent_id TEXT;" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "ALTER TABLE channel_users ADD COLUMN IF NOT EXISTS remote_jid TEXT;" "$DB"
         '';
       };
     };
