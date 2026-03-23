@@ -73,18 +73,23 @@ function getAgentForSender(sender, displayName, remoteJid) {
   const safeDisplay = sqlEscape(displayName || 'Unknown');
   const safeJid = sqlEscape(remoteJid || '');
 
-  // Upsert channel_users and get agent_id
-  const row = psql(
+  // Upsert channel_users row
+  psql(
     "INSERT INTO channel_users (channel, channel_user_id, display_name, remote_jid) " +
     "VALUES ('whatsapp', '" + safeSender + "', '" + safeDisplay + "', '" + safeJid + "') " +
     "ON CONFLICT (channel, channel_user_id) DO UPDATE SET " +
     "display_name = '" + safeDisplay + "', " +
-    "remote_jid = COALESCE(NULLIF('" + safeJid + "', ''), channel_users.remote_jid) " +
-    "RETURNING agent_id"
+    "remote_jid = COALESCE(NULLIF('" + safeJid + "', ''), channel_users.remote_jid)"
   );
 
-  if (row && row !== '' && row !== 'null') {
-    return row;
+  // Check for existing agent_id
+  const existingId = psql(
+    "SELECT agent_id FROM channel_users WHERE channel = 'whatsapp' AND channel_user_id = '" + safeSender + "'"
+  );
+
+  // Valid UUID check
+  if (existingId && /^[a-f0-9-]{36}$/.test(existingId)) {
+    return existingId;
   }
 
   // No agent yet — spawn one
