@@ -55,15 +55,22 @@ let
           exit 1
         fi
 
-        # Get title from search
-        TITLE=$(curl -s "$API_URL/search?query=$TMDB_ID&language=en" \
-          -H "X-Api-Key: $API_KEY" | jq -r '.results[0].title // .results[0].name // "Unknown"')
+        # Get title from TMDB details
+        if [ "$TYPE" = "movie" ]; then
+          TITLE=$(curl -s "$API_URL/movie/$TMDB_ID" -H "X-Api-Key: $API_KEY" | jq -r '.title // "Unknown"')
+        else
+          TITLE=$(curl -s "$API_URL/tv/$TMDB_ID" -H "X-Api-Key: $API_KEY" | jq -r '.name // "Unknown"')
+        fi
+
+        # Sanitize inputs for SQL (escape single quotes)
+        SAFE_DISPLAY=$(echo "$DISPLAY" | sed "s/'/''/g")
+        SAFE_TITLE=$(echo "$TITLE" | sed "s/'/''/g")
 
         # Upsert channel user
-        USER_ID=$(psql -t -A -c "INSERT INTO channel_users (channel, channel_user_id, display_name) VALUES ('$CHANNEL', '$CHAN_USER', '$DISPLAY') ON CONFLICT (channel, channel_user_id) DO UPDATE SET display_name = '$DISPLAY' RETURNING id;" "$DB")
+        USER_ID=$(psql -t -A -c "INSERT INTO channel_users (channel, channel_user_id, display_name) VALUES ('$CHANNEL', '$CHAN_USER', '$SAFE_DISPLAY') ON CONFLICT (channel, channel_user_id) DO UPDATE SET display_name = '$SAFE_DISPLAY' RETURNING id;" "$DB")
 
         # Track the request
-        psql -c "INSERT INTO media_requests (jellyseerr_request_id, tmdb_id, title, media_type, channel_user_id) VALUES ('$REQ_ID', '$TMDB_ID', '$TITLE', '$TYPE', $USER_ID);" "$DB"
+        psql -c "INSERT INTO media_requests (jellyseerr_request_id, tmdb_id, title, media_type, channel_user_id) VALUES ('$REQ_ID', '$TMDB_ID', '$SAFE_TITLE', '$TYPE', $USER_ID);" "$DB"
 
         echo "Request submitted! ID: $REQ_ID. You'll be notified when \"$TITLE\" is available."
         ;;
