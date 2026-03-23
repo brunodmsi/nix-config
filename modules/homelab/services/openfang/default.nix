@@ -212,6 +212,7 @@ in
       wants = [ "network-online.target" ];
       requires = [ "openfang-install.service" ];
       wantedBy = [ "multi-user.target" ];
+      path = with pkgs; [ bash coreutils gnugrep gnused findutils curl jq postgresql ];
       environment = {
         HOME = cfg.configDir;
         OPENFANG_CONFIG = "/etc/openfang/config.toml";
