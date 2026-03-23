@@ -105,11 +105,12 @@ let
         SAFE_DISPLAY=$(echo "$DISPLAY" | sed "s/'/''''/g")
         SAFE_TITLE=$(echo "$TITLE" | sed "s/'/''''/g")
 
-        # Upsert channel user
-        USER_ID=$(psql -t -A -c "INSERT INTO channel_users (channel, channel_user_id, display_name) VALUES ('$CHANNEL', '$CHAN_USER', '$SAFE_DISPLAY') ON CONFLICT (channel, channel_user_id) DO UPDATE SET display_name = '$SAFE_DISPLAY' RETURNING id;" "$DB")
+        # Upsert channel user (separate insert + select to avoid mixed output)
+        psql -c "INSERT INTO channel_users (channel, channel_user_id, display_name) VALUES ('$CHANNEL', '$CHAN_USER', '$SAFE_DISPLAY') ON CONFLICT (channel, channel_user_id) DO UPDATE SET display_name = '$SAFE_DISPLAY';" "$DB" 2>/dev/null
+        USER_ID=$(psql -t -A -c "SELECT id FROM channel_users WHERE channel = '$CHANNEL' AND channel_user_id = '$CHAN_USER';" "$DB")
 
         # Track the request
-        psql -c "INSERT INTO media_requests (jellyseerr_request_id, tmdb_id, title, media_type, channel_user_id) VALUES ('$REQ_ID', '$TMDB_ID', '$SAFE_TITLE', '$TYPE', $USER_ID);" "$DB"
+        psql -c "INSERT INTO media_requests (jellyseerr_request_id, tmdb_id, title, media_type, channel_user_id) VALUES ('$REQ_ID', '$TMDB_ID', '$SAFE_TITLE', '$TYPE', $USER_ID);" "$DB" 2>/dev/null
 
         echo "Request submitted! ID: $REQ_ID. You'll be notified when \"$TITLE\" is available."
         ;;
