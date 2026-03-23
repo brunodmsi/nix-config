@@ -63,8 +63,8 @@ let
         fi
 
         # Sanitize inputs for SQL (escape single quotes)
-        SAFE_DISPLAY=$(echo "$DISPLAY" | sed "s/'/''/g")
-        SAFE_TITLE=$(echo "$TITLE" | sed "s/'/''/g")
+        SAFE_DISPLAY=$(echo "$DISPLAY" | sed "s/'/''''/g")
+        SAFE_TITLE=$(echo "$TITLE" | sed "s/'/''''/g")
 
         # Upsert channel user
         USER_ID=$(psql -t -A -c "INSERT INTO channel_users (channel, channel_user_id, display_name) VALUES ('$CHANNEL', '$CHAN_USER', '$SAFE_DISPLAY') ON CONFLICT (channel, channel_user_id) DO UPDATE SET display_name = '$SAFE_DISPLAY' RETURNING id;" "$DB")
