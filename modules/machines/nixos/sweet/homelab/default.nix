@@ -89,12 +89,12 @@
           Request: shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh request movie TMDB_ID whatsapp PHONE DISPLAY_NAME"}
           Request TV: shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh request tv TMDB_ID whatsapp PHONE DISPLAY_NAME"}
 
-          PHONE and DISPLAY_NAME come from the message metadata (sender and sender_name fields).
+          PHONE and DISPLAY_NAME: Every message you receive includes metadata with "sender" (phone number like +5511999999999) and "sender_name". You already have this info — NEVER ask the user for their phone number or name. Use the metadata values directly.
 
           Steps:
           1. User mentions a movie/show → run the search command with FULL PATH
-          2. Show results and ask which one
-          3. User confirms → run the request command with FULL PATH
+          2. Show results and ask which one they want
+          3. User confirms → run the request command using their sender phone and sender_name from the metadata
           4. Tell them they'll be notified when it's on Jellyfin
         '';
         llmProvider = "anthropic";
