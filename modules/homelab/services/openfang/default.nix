@@ -300,6 +300,12 @@ in
           fi
           cd "$GATEWAY_DIR"
           ${pkgs.nodejs_22}/bin/npm install --omit=dev 2>&1
+
+          # Patch: use senderPn (real phone) for DM replies instead of LID
+          if grep -q "const senderJid = isGroup" "$GATEWAY_DIR/index.js" && ! grep -q "senderPn" "$GATEWAY_DIR/index.js"; then
+            ${pkgs.gnused}/bin/sed -i "s/: remoteJid;/: (msg.key.senderPn || remoteJid);/" "$GATEWAY_DIR/index.js"
+            echo "[patch] Patched senderJid to use senderPn for DM replies"
+          fi
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
           export PATH=${pkgs.nodejs_22}/bin:$PATH
