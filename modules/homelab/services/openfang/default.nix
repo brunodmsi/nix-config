@@ -256,12 +256,23 @@ in
             sleep 2
           done
 
+          MANIFEST=$(cat /etc/openfang/agent-manifest.toml)
+
           # Create default agent if none exist
           AGENT_COUNT=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq 'length')
           if [ "$AGENT_COUNT" = "0" ] || [ -z "$AGENT_COUNT" ]; then
             echo "[sync] No agents found, spawning ${cfg.agentName} from manifest..."
             $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
           fi
+
+          # Update all agents with current manifest (name, model, system prompt)
+          AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
+          for AGENT_ID in $AGENTS; do
+            ${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
+              -H "Content-Type: application/json" \
+              -d "{\"manifest_toml\": $(echo "$MANIFEST" | ${pkgs.jq}/bin/jq -Rs .)}"
+            echo "[sync] Updated agent $AGENT_ID"
+          done
 
           # Verify
           ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[] | {id, name}'
