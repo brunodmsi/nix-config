@@ -53,9 +53,10 @@
 
   programs.git.enable = true;
   programs.bash.shellAliases = {
+    sudo = "sudo ";
     gpush = "GIT_SSH_COMMAND='ssh -i /persist/ssh/ssh_host_ed25519_key' git push";
     gpull = "GIT_SSH_COMMAND='ssh -i /persist/ssh/ssh_host_ed25519_key' git pull";
-    rebuild = "cd /etc/nixos && sudo GIT_SSH_COMMAND='ssh -i /persist/ssh/ssh_host_ed25519_key' git pull && sudo nixos-rebuild switch --flake /etc/nixos#sweet";
+    rebuild = "cd /etc/nixos && sudo gpull && sudo nixos-rebuild switch --flake /etc/nixos#sweet";
   };
 
   environment.systemPackages = with pkgs; [
