@@ -225,9 +225,9 @@ in
       };
     };
 
-    # Sync system prompt to all per-user agents on rebuild
+    # Ensure default agent exists and sync system prompt on rebuild
     systemd.services.openfang-sync-agents = {
-      description = "Sync Fluzy persona to all OpenFang agents";
+      description = "Ensure Fluzy agent exists and sync persona";
       after = [ "openfang.service" ];
       requires = [ "openfang.service" ];
       wantedBy = [ "multi-user.target" ];
@@ -238,6 +238,7 @@ in
           export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
 
           OPENFANG_API="http://127.0.0.1:50051"
+          AGENT_NAME=${lib.escapeShellArg cfg.agentName}
           SYSTEM_PROMPT=${lib.escapeShellArg cfg.systemPrompt}
 
           # Wait for API readiness
@@ -246,14 +247,23 @@ in
             sleep 2
           done
 
-          # Update all agents with current system prompt
+          # Create default agent if none exist
+          AGENT_COUNT=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq 'length')
+          if [ "$AGENT_COUNT" = "0" ] || [ -z "$AGENT_COUNT" ]; then
+            echo "[sync] No agents found, creating $AGENT_NAME..."
+            ${pkgs.curl}/bin/curl -s -X POST "$OPENFANG_API/api/agents" \
+              -H "Content-Type: application/json" \
+              -d '{"manifest_toml": ""}' >/dev/null
+          fi
+
+          # Update all agents with current name + system prompt
           AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
 
           for AGENT_ID in $AGENTS; do
             ${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
               -H "Content-Type: application/json" \
-              -d "{\"system_prompt\": $(echo "$SYSTEM_PROMPT" | ${pkgs.jq}/bin/jq -Rs .), \"description\": $(echo ${lib.escapeShellArg cfg.agentName} | ${pkgs.jq}/bin/jq -Rs .)}"
-            echo "[sync] Updated agent $AGENT_ID"
+              -d "{\"name\": $(echo "$AGENT_NAME" | ${pkgs.jq}/bin/jq -Rs .), \"system_prompt\": $(echo "$SYSTEM_PROMPT" | ${pkgs.jq}/bin/jq -Rs .)}"
+            echo "[sync] Updated agent $AGENT_ID → $AGENT_NAME"
           done
         '';
       };
