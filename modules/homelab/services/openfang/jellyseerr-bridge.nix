@@ -160,13 +160,15 @@ let
               ] | join(", ")' 2>/dev/null)
           fi
 
-          # Show download progress if any
+          # Show download progress (group by downloadId to avoid per-episode spam)
           DL_INFO=$(echo "$MEDIA" | jq -r '
-            [.mediaInfo.downloadStatus // [] | .[] |
-              (.name // "unknown") + " " + ((.percentComplete // 0 | tostring) + "%")
-            ] | join(", ")' 2>/dev/null)
+            [.mediaInfo.downloadStatus // [] | group_by(.downloadId) | .[] | .[0] |
+              (.status) + " " +
+              (if .size > 0 then ((((.size - .sizeLeft) * 100 / .size) | floor | tostring) + "%") else "0%" end) +
+              " (ETA: " + (.timeLeft // "unknown") + ")"
+            ] | unique | join(", ")' 2>/dev/null)
           if [ -n "$DL_INFO" ] && [ "$DL_INFO" != "" ]; then
-            SEASON_INFO="$SEASON_INFO | Downloads: $DL_INFO"
+            SEASON_INFO="$SEASON_INFO | $DL_INFO"
           fi
 
           if [ -n "$SEASON_INFO" ]; then
