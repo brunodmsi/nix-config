@@ -279,7 +279,7 @@ in
       environment = {
         HOME = cfg.configDir;
         WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
-        OPENFANG_URL = "http://127.0.0.1:${toString cfg.listenPort}";
+        OPENFANG_URL = "http://127.0.0.1:50051";
       };
       serviceConfig = {
         Type = "simple";
