@@ -84,7 +84,6 @@ in
           mail
           notes
           tasks
-          twofactor_totp
           ;
       };
       settings = {
