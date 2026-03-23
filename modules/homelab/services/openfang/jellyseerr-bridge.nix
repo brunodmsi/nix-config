@@ -27,24 +27,50 @@ let
         echo "$RESULTS" | jq -r '.results[:5][] | "\(.mediaType // "unknown") | \(.title // .name // "Unknown") (\(.releaseDate // .firstAirDate // "?" | split("-")[0])) | TMDB ID: \(.id)"'
         ;;
 
+      details)
+        TMDB_ID="$2"
+        DETAILS=$(curl -s "$API_URL/tv/$TMDB_ID" -H "X-Api-Key: $API_KEY")
+        NAME=$(echo "$DETAILS" | jq -r '.name // "Unknown"')
+        YEAR=$(echo "$DETAILS" | jq -r '.firstAirDate // "?" | split("-")[0]')
+        NUM_SEASONS=$(echo "$DETAILS" | jq -r '.numberOfSeasons // 0')
+        SEASONS=$(echo "$DETAILS" | jq -r '[.seasons[] | select(.seasonNumber > 0) | "S\(.seasonNumber) (\(.episodeCount) eps)"] | join(", ")')
+        OVERVIEW=$(echo "$DETAILS" | jq -r '.overview // "No description" | .[0:200]')
+        echo "$NAME ($YEAR) — $NUM_SEASONS seasons"
+        echo "Seasons: $SEASONS"
+        echo "Overview: $OVERVIEW"
+        ;;
+
       request)
         TYPE="$2"        # movie or tv
         TMDB_ID="$3"
-        CHANNEL="$4"     # whatsapp, discord, telegram
-        CHAN_USER="$5"    # phone number, discord ID, etc
-        DISPLAY="$6"     # display name
+        SEASONS="$4"     # "all" or "1,2,3" (for TV) / ignored for movie
+        CHANNEL="$5"     # whatsapp, discord, telegram
+        CHAN_USER="$6"    # phone number, discord ID, etc
+        DISPLAY="$7"     # display name
 
-        # Create Jellyseerr request
+        # For movie, shift args back (no seasons arg)
         if [ "$TYPE" = "movie" ]; then
+          CHANNEL="$4"
+          CHAN_USER="$5"
+          DISPLAY="$6"
           RESPONSE=$(curl -s -X POST "$API_URL/request" \
             -H "X-Api-Key: $API_KEY" \
             -H "Content-Type: application/json" \
             -d "{\"mediaType\":\"movie\",\"mediaId\":$TMDB_ID}")
         else
-          RESPONSE=$(curl -s -X POST "$API_URL/request" \
-            -H "X-Api-Key: $API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"mediaType\":\"tv\",\"mediaId\":$TMDB_ID,\"seasons\":\"all\"}")
+          if [ "$SEASONS" = "all" ]; then
+            RESPONSE=$(curl -s -X POST "$API_URL/request" \
+              -H "X-Api-Key: $API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"mediaType\":\"tv\",\"mediaId\":$TMDB_ID,\"seasons\":\"all\"}")
+          else
+            # Convert "1,2,3" to JSON array [1,2,3]
+            SEASONS_JSON=$(echo "$SEASONS" | tr ',' '\n' | jq -s '.')
+            RESPONSE=$(curl -s -X POST "$API_URL/request" \
+              -H "X-Api-Key: $API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"mediaType\":\"tv\",\"mediaId\":$TMDB_ID,\"seasons\":$SEASONS_JSON}")
+          fi
         fi
 
         REQ_ID=$(echo "$RESPONSE" | jq -r '.id // empty')
@@ -75,9 +101,61 @@ let
         echo "Request submitted! ID: $REQ_ID. You'll be notified when \"$TITLE\" is available."
         ;;
 
+      status)
+        CHANNEL="$2"
+        CHAN_USER="$3"
+
+        RESULTS=$(psql -t -A -F'|' -c "SELECT mr.jellyseerr_request_id, mr.title, mr.media_type, mr.status FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE cu.channel = '$CHANNEL' AND cu.channel_user_id = '$CHAN_USER' ORDER BY mr.requested_at DESC LIMIT 10;" "$DB")
+
+        if [ -z "$RESULTS" ]; then
+          echo "No requests found."
+          exit 0
+        fi
+
+        echo "Your requests:"
+        echo "$RESULTS" | while IFS='|' read -r REQ_ID TITLE MTYPE STATUS; do
+          # Check live status from Jellyseerr
+          LIVE=$(curl -s "$API_URL/request/$REQ_ID" -H "X-Api-Key: $API_KEY" 2>/dev/null)
+          LIVE_STATUS=$(echo "$LIVE" | jq -r '.status // empty' 2>/dev/null)
+          case "$LIVE_STATUS" in
+            1) DISPLAY_STATUS="pending" ;;
+            2) DISPLAY_STATUS="approved" ;;
+            3) DISPLAY_STATUS="declined" ;;
+            4) DISPLAY_STATUS="available" ;;
+            *) DISPLAY_STATUS="$STATUS" ;;
+          esac
+          echo "- $TITLE ($MTYPE) | Status: $DISPLAY_STATUS | ID: $REQ_ID"
+        done
+        ;;
+
+      delete)
+        REQ_ID="$2"
+        CHANNEL="$3"
+        CHAN_USER="$4"
+
+        # Verify ownership
+        OWNER=$(psql -t -A -c "SELECT cu.channel_user_id FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE mr.jellyseerr_request_id = '$REQ_ID' AND cu.channel = '$CHANNEL' LIMIT 1;" "$DB")
+
+        if [ "$OWNER" != "$CHAN_USER" ]; then
+          echo "Error: Request $REQ_ID does not belong to you."
+          exit 1
+        fi
+
+        # Delete from Jellyseerr
+        DEL_RESP=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$API_URL/request/$REQ_ID" -H "X-Api-Key: $API_KEY")
+
+        if [ "$DEL_RESP" = "204" ] || [ "$DEL_RESP" = "200" ]; then
+          psql -c "UPDATE media_requests SET status = 'cancelled' WHERE jellyseerr_request_id = '$REQ_ID';" "$DB" 2>/dev/null
+          TITLE=$(psql -t -A -c "SELECT title FROM media_requests WHERE jellyseerr_request_id = '$REQ_ID';" "$DB")
+          echo "Deleted request for \"$TITLE\" (ID: $REQ_ID)."
+        else
+          echo "Failed to delete request $REQ_ID (HTTP $DEL_RESP)."
+          exit 1
+        fi
+        ;;
+
       *)
-        echo "Usage: jellyseerr-tool.sh search <query>"
-        echo "       jellyseerr-tool.sh request <movie|tv> <tmdbId> <channel> <channel_user_id> <display_name>"
+        echo "Commands: search, details, request, status, delete"
         ;;
     esac
   '';
