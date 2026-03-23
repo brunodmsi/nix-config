@@ -77,7 +77,7 @@ in
         };
 
         access_control = {
-          default_policy = "one_factor";
+          default_policy = "two_factor";
         };
 
         storage = {
