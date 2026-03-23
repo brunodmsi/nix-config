@@ -231,15 +231,19 @@ in
       after = [ "openfang.service" ];
       requires = [ "openfang.service" ];
       wantedBy = [ "multi-user.target" ];
+      environment = {
+        HOME = cfg.configDir;
+      };
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "openfang-sync-agents" ''
           export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH
+          export HOME=${cfg.configDir}
 
           OPENFANG_API="http://127.0.0.1:50051"
-          AGENT_NAME=${lib.escapeShellArg cfg.agentName}
-          SYSTEM_PROMPT=${lib.escapeShellArg cfg.systemPrompt}
+          OPENFANG_BIN="${cfg.configDir}/.openfang/bin/openfang"
+          OPENFANG_CONFIG="${cfg.configDir}/.openfang/config.toml"
 
           # Wait for API readiness
           for i in $(seq 1 30); do
@@ -250,23 +254,12 @@ in
           # Create default agent if none exist
           AGENT_COUNT=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq 'length')
           if [ "$AGENT_COUNT" = "0" ] || [ -z "$AGENT_COUNT" ]; then
-            echo "[sync] No agents found, creating $AGENT_NAME..."
-            MANIFEST=$(cat /etc/openfang/agent-manifest.toml)
-            CREATE_RESP=$(${pkgs.curl}/bin/curl -s -X POST "$OPENFANG_API/api/agents" \
-              -H "Content-Type: application/json" \
-              -d "{\"manifest_toml\": $(echo "$MANIFEST" | ${pkgs.jq}/bin/jq -Rs .)}")
-            echo "[sync] Create response: $CREATE_RESP"
+            echo "[sync] No agents found, spawning ${cfg.agentName} from manifest..."
+            $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
           fi
 
-          # Update all agents with current name + system prompt
-          AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
-
-          for AGENT_ID in $AGENTS; do
-            ${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
-              -H "Content-Type: application/json" \
-              -d "{\"name\": $(echo "$AGENT_NAME" | ${pkgs.jq}/bin/jq -Rs .), \"system_prompt\": $(echo "$SYSTEM_PROMPT" | ${pkgs.jq}/bin/jq -Rs .)}"
-            echo "[sync] Updated agent $AGENT_ID → $AGENT_NAME"
-          done
+          # Verify
+          ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[] | {id, name}'
         '';
       };
     };
