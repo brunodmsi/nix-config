@@ -18,7 +18,7 @@ let
     # 1. Fix DM replies: use remoteJid directly (LID JIDs are valid for sending)
     #    The original code strips @lid and adds @s.whatsapp.net which breaks LID replies
     src = src.replace(
-        "const replyJid = isGroup ? remoteJid : senderJid.replace(/@.*$/, '') + '@s.whatsapp.net';",
+        "const replyJid = isGroup ? remoteJid : senderJid.replace(/@.*$/, '''') + '@s.whatsapp.net';",
         "// PATCHED_V5\n          const replyJid = isGroup ? remoteJid : remoteJid;"
     )
 
