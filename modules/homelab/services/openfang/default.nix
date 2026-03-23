@@ -326,8 +326,8 @@ in
       if (globalThis._seenMsgs.size > 1000) globalThis._seenMsgs.clear();\
       console.log(`[gateway] MSG ${msgId} | remoteJid=${remoteJid} | senderPn=${msg.key.senderPn || "none"} | senderJid=${senderJid} | phone=${phone}`);' "$GATEWAY_DIR/index.js"
 
-            # Add reply JID logging before sendMessage
-            ${pkgs.gnused}/bin/sed -i 's|const replyJid = isGroup|console.log(`[gateway] REPLY: replyJid will be ${isGroup ? remoteJid : senderJid.replace(/@.*$/, "") + "@s.whatsapp.net"}`);\n          const replyJid = isGroup|' "$GATEWAY_DIR/index.js"
+            # Add reply JID logging after replyJid is set
+            ${pkgs.gnused}/bin/sed -i 's|await sock.sendMessage(replyJid|console.log("[gateway] REPLY: sending to " + replyJid); await sock.sendMessage(replyJid|' "$GATEWAY_DIR/index.js"
 
             echo "[patch] Gateway patched with dedup + logging"
           fi
