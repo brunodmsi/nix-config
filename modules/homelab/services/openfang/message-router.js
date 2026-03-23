@@ -49,15 +49,25 @@ function sqlEscape(str) {
   return (str || '').replace(/'/g, "''");
 }
 
-function spawnAgent() {
+function spawnAgent(senderPhone) {
   try {
+    // Create a per-sender manifest with unique name
+    const manifest = fs.readFileSync(MANIFEST_PATH, 'utf8');
+    const stripped = senderPhone.replace(/[^0-9]/g, '');
+    const uniqueName = 'fluzy-' + stripped;
+    const tmpManifest = '/tmp/openfang-manifest-' + stripped + '.toml';
+    fs.writeFileSync(tmpManifest, manifest.replace(/^name = ".*"$/m, 'name = "' + uniqueName + '"'));
+
     const out = execSync(
-      `HOME=${HOME_DIR} ${OPENFANG_BIN} agent spawn --config "${OPENFANG_CONFIG}" "${MANIFEST_PATH}"`,
+      `HOME=${HOME_DIR} ${OPENFANG_BIN} agent spawn --config "${OPENFANG_CONFIG}" "${tmpManifest}"`,
       { encoding: 'utf8', timeout: 30000, env: { ...process.env, HOME: HOME_DIR } }
     );
+
+    try { fs.unlinkSync(tmpManifest); } catch {}
+
     const match = out.match(/ID:\s+([a-f0-9-]+)/);
     if (match) {
-      console.log('[router] Spawned new agent:', match[1]);
+      console.log('[router] Spawned agent ' + uniqueName + ':', match[1]);
       return match[1];
     }
     console.error('[router] Could not parse agent ID from spawn output:', out);
@@ -93,7 +103,7 @@ function getAgentForSender(sender, displayName, remoteJid) {
   }
 
   // No agent yet — spawn one
-  const agentId = spawnAgent();
+  const agentId = spawnAgent(sender);
   if (agentId) {
     psql(
       "UPDATE channel_users SET agent_id = '" + agentId + "' " +
