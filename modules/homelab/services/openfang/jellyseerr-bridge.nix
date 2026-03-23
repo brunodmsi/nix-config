@@ -145,11 +145,11 @@ let
             *) DISPLAY_STATUS="unknown" ;;
           esac
 
-          # For TV, show per-season status
+          # For TV, show per-season status from request seasons
           SEASON_INFO=""
           if [ "$MTYPE" = "tv" ]; then
             SEASON_INFO=$(echo "$MEDIA" | jq -r '
-              [.mediaInfo.seasons // [] | .[] |
+              [.mediaInfo.requests // [] | .[].seasons // [] | .[] |
                 "S" + (.seasonNumber | tostring) + ": " +
                 (if .status == 5 then "available"
                  elif .status == 4 then "partially available"
@@ -158,6 +158,15 @@ let
                  elif .status == 1 then "pending"
                  else "unknown" end)
               ] | join(", ")' 2>/dev/null)
+          fi
+
+          # Show download progress if any
+          DL_INFO=$(echo "$MEDIA" | jq -r '
+            [.mediaInfo.downloadStatus // [] | .[] |
+              (.name // "unknown") + " " + ((.percentComplete // 0 | tostring) + "%")
+            ] | join(", ")' 2>/dev/null)
+          if [ -n "$DL_INFO" ] && [ "$DL_INFO" != "" ]; then
+            SEASON_INFO="$SEASON_INFO | Downloads: $DL_INFO"
           fi
 
           if [ -n "$SEASON_INFO" ]; then
