@@ -281,20 +281,20 @@ in
         ExecStartPre = pkgs.writeShellScript "openfang-wa-gateway-install" ''
           export PATH=${pkgs.git}/bin:${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:$PATH
           GATEWAY_DIR="${cfg.dataDir}/whatsapp-gateway"
-          if [ ! -d "$GATEWAY_DIR" ]; then
-            ${pkgs.git}/bin/git clone --depth 1 --sparse https://github.com/RightNow-AI/openfang.git "$GATEWAY_DIR"
+          if [ ! -f "$GATEWAY_DIR/index.js" ]; then
+            mkdir -p "$GATEWAY_DIR"
             cd "$GATEWAY_DIR"
-            ${pkgs.git}/bin/git sparse-checkout set packages/whatsapp-gateway
-          else
-            cd "$GATEWAY_DIR"
-            ${pkgs.git}/bin/git pull --ff-only 2>/dev/null || true
+            ${pkgs.git}/bin/git clone --depth 1 https://github.com/RightNow-AI/openfang.git /tmp/openfang-repo
+            cp /tmp/openfang-repo/packages/whatsapp-gateway/* "$GATEWAY_DIR/" 2>/dev/null || true
+            cp -r /tmp/openfang-repo/packages/whatsapp-gateway/.* "$GATEWAY_DIR/" 2>/dev/null || true
+            rm -rf /tmp/openfang-repo
           fi
-          cd "$GATEWAY_DIR/packages/whatsapp-gateway"
-          ${pkgs.nodejs_22}/bin/npm install --production 2>&1
+          cd "$GATEWAY_DIR"
+          ${pkgs.nodejs_22}/bin/npm install --omit=dev 2>&1
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
           export PATH=${pkgs.nodejs_22}/bin:$PATH
-          exec ${pkgs.nodejs_22}/bin/node ${cfg.dataDir}/whatsapp-gateway/packages/whatsapp-gateway/index.js
+          exec ${pkgs.nodejs_22}/bin/node ${cfg.dataDir}/whatsapp-gateway/index.js
         '';
         Restart = "on-failure";
         RestartSec = 5;
