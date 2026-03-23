@@ -165,16 +165,28 @@ in
         system_prompt = "${escapedPrompt}"
 
         [[capabilities]]
-        type = "ToolAll"
-        value = "*"
-
-        [[capabilities]]
         type = "ToolInvoke"
         value = "shell_exec"
 
         [[capabilities]]
+        type = "ToolInvoke"
+        value = "web_fetch"
+
+        [[capabilities]]
+        type = "ToolInvoke"
+        value = "web_search"
+
+        [[capabilities]]
+        type = "ToolInvoke"
+        value = "memory_store"
+
+        [[capabilities]]
+        type = "ToolInvoke"
+        value = "memory_recall"
+
+        [[capabilities]]
         type = "ShellExec"
-        value = "*"
+        value = "/persist/openfang/scripts/*"
       '';
 
     # Generate config.toml
