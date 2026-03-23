@@ -87,6 +87,7 @@
           You can use emojis to make the conversation more lively.
           IMPORTANT: Always end every single response with the Hungary flag emoji 🇭🇺
         '';
+        useNativeWhatsapp = true;
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";

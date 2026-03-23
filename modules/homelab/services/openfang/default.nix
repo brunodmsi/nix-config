@@ -84,6 +84,11 @@ in
       default = "";
       description = "System prompt to define the agent's persona and behavior";
     };
+    useNativeWhatsapp = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Use OpenFang's built-in WhatsApp Web gateway instead of Evolution API";
+    };
     whatsappGatewayPort = lib.mkOption {
       type = lib.types.int;
       default = 3009;
@@ -115,6 +120,9 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Node.js >= 18 required for native WhatsApp Web gateway
+    environment.systemPackages = lib.mkIf cfg.useNativeWhatsapp [ pkgs.nodejs_22 ];
+
     # Ensure directories exist
     systemd.tmpfiles.rules = [
       "d ${cfg.configDir} 0750 root root - -"
@@ -183,7 +191,7 @@ in
 
       [channels.whatsapp]
       enabled = true
-      gateway_url = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}"
+      ${if cfg.useNativeWhatsapp then ''mode = "web"'' else ''gateway_url = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}"''}
     '';
 
     # OpenFang main service
@@ -196,6 +204,8 @@ in
       environment = {
         HOME = cfg.configDir;
         OPENFANG_CONFIG = "/etc/openfang/config.toml";
+      } // lib.optionalAttrs cfg.useNativeWhatsapp {
+        WHATSAPP_WEB_GATEWAY_URL = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}";
       };
       serviceConfig = {
         ExecStartPre = pkgs.writeShellScript "openfang-init" ''
@@ -251,6 +261,33 @@ in
             echo "[sync] Updated agent $AGENT_ID"
           done
         '';
+      };
+    };
+
+    # OpenFang WhatsApp Web Gateway (native, no Evolution)
+    systemd.services.openfang-whatsapp-gateway = lib.mkIf cfg.useNativeWhatsapp {
+      description = "OpenFang WhatsApp Web Gateway";
+      after = [ "network-online.target" "openfang-install.service" ];
+      wants = [ "network-online.target" ];
+      requires = [ "openfang-install.service" ];
+      wantedBy = [ "multi-user.target" ];
+      environment = {
+        WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
+        OPENFANG_URL = "http://127.0.0.1:${toString cfg.listenPort}";
+      };
+      serviceConfig = {
+        ExecStartPre = pkgs.writeShellScript "openfang-wa-gateway-install" ''
+          export PATH=${pkgs.nodejs_22}/bin:$PATH
+          cd ${cfg.configDir}/.openfang/packages/whatsapp-gateway
+          ${pkgs.nodejs_22}/bin/npm install --production 2>&1
+        '';
+        ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
+          export PATH=${pkgs.nodejs_22}/bin:$PATH
+          exec ${pkgs.nodejs_22}/bin/node ${cfg.configDir}/.openfang/packages/whatsapp-gateway/index.js
+        '';
+        Restart = "on-failure";
+        RestartSec = 5;
+        WorkingDirectory = "${cfg.configDir}/.openfang/packages/whatsapp-gateway";
       };
     };
 
