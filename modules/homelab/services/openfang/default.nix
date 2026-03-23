@@ -167,6 +167,10 @@ in
         [capabilities]
         tools = ["shell_exec", "web_fetch", "web_search", "memory_store", "memory_recall"]
         shell = ["/persist/openfang/scripts/*"]
+
+        [exec_policy]
+        mode = "allowlist"
+        allowed_commands = ["/persist/openfang/scripts/jellyseerr-tool.sh"]
       '';
 
     # Generate config.toml
