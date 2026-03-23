@@ -279,6 +279,22 @@ in
           echo "[sync] Spawning ${cfg.agentName} from manifest..."
           $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
 
+          # Apply manifest update via API (spawn doesn't set system_prompt)
+          sleep 1
+          AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
+          for AGENT_ID in $AGENTS; do
+            echo "[sync] Applying manifest to agent $AGENT_ID..."
+            RESP=$(${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
+              -H "Content-Type: application/json" \
+              -d "{\"manifest_toml\": $(echo "$MANIFEST" | ${pkgs.jq}/bin/jq -Rs .)}")
+            echo "[sync] Response: $RESP"
+
+            # Restart agent to apply (API says restart required)
+            $OPENFANG_BIN agent kill --config "$OPENFANG_CONFIG" "$AGENT_ID" 2>/dev/null || true
+            sleep 1
+            $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
+          done
+
           # Verify
           ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[] | {id, name}'
         '';
