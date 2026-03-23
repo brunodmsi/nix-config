@@ -166,10 +166,15 @@ in
 
         [[capabilities]]
         type = "ToolAll"
+        value = "*"
+
+        [[capabilities]]
+        type = "ToolInvoke"
+        value = "shell_exec"
 
         [[capabilities]]
         type = "ShellExec"
-        value = "/persist/openfang/scripts/*"
+        value = "*"
       '';
 
     # Generate config.toml
