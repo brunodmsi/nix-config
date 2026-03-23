@@ -264,7 +264,11 @@ in
           done
 
           $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
-          ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[] | {id, name}'
+
+          # Write agent ID to file for gateway to use
+          AGENT_ID=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[0].id')
+          echo "$AGENT_ID" > ${cfg.dataDir}/default-agent-id
+          echo "[sync] Agent ID: $AGENT_ID"
         '';
       };
     };
@@ -272,15 +276,14 @@ in
     # WhatsApp Web Gateway
     systemd.services.openfang-whatsapp-gateway = {
       description = "OpenFang WhatsApp Web Gateway";
-      after = [ "network-online.target" "openfang-install.service" ];
+      after = [ "network-online.target" "openfang-install.service" "openfang-sync-agents.service" ];
       wants = [ "network-online.target" ];
-      requires = [ "openfang-install.service" ];
+      requires = [ "openfang-install.service" "openfang-sync-agents.service" ];
       wantedBy = [ "multi-user.target" ];
       environment = {
         HOME = cfg.configDir;
         WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
         OPENFANG_URL = "http://127.0.0.1:50051";
-        OPENFANG_DEFAULT_AGENT = lib.toLower cfg.agentName;
       };
       serviceConfig = {
         Type = "simple";
@@ -300,6 +303,7 @@ in
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
           export PATH=${pkgs.nodejs_22}/bin:$PATH
+          export OPENFANG_DEFAULT_AGENT=$(cat ${cfg.dataDir}/default-agent-id)
           exec ${pkgs.nodejs_22}/bin/node ${cfg.dataDir}/whatsapp-gateway/index.js
         '';
         Restart = "on-failure";
