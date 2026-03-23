@@ -280,6 +280,7 @@ in
         HOME = cfg.configDir;
         WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
         OPENFANG_URL = "http://127.0.0.1:50051";
+        OPENFANG_DEFAULT_AGENT = lib.toLower cfg.agentName;
       };
       serviceConfig = {
         Type = "simple";
