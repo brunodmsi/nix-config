@@ -143,14 +143,14 @@ in
       };
     };
 
-    # Agent manifest template — used to spawn agents via CLI
+    # Fluzy agent template — placed in OpenFang's custom templates dir
     environment.etc."openfang/agent-manifest.toml".text =
       let
-        # Escape system prompt for TOML: replace newlines with \n for single-line string
         escapedPrompt = lib.replaceStrings [ "\n" "\"" "\\" ] [ "\\n" "\\\"" "\\\\" ] cfg.systemPrompt;
+        lowerName = lib.toLower cfg.agentName;
       in
       ''
-        name = "${cfg.agentName}"
+        name = "${lowerName}"
         version = "0.1.0"
         description = "${cfg.agentName} WhatsApp assistant"
         author = "bmasi"
@@ -195,7 +195,7 @@ in
       [channels.whatsapp]
       enabled = true
       mode = "web"
-      default_agent = "${cfg.agentName}"
+      default_agent = "${lib.toLower cfg.agentName}"
     '';
 
     # OpenFang main service
@@ -233,9 +233,9 @@ in
       };
     };
 
-    # Ensure default agent exists and sync system prompt on rebuild
+    # Install Fluzy as a custom agent template + ensure agent exists
     systemd.services.openfang-sync-agents = {
-      description = "Ensure Fluzy agent exists and sync persona";
+      description = "Install Fluzy template and ensure agent exists";
       after = [ "openfang.service" ];
       requires = [ "openfang.service" ];
       wantedBy = [ "multi-user.target" ];
@@ -252,6 +252,12 @@ in
           OPENFANG_API="http://127.0.0.1:50051"
           OPENFANG_BIN="${cfg.configDir}/.openfang/bin/openfang"
           OPENFANG_CONFIG="${cfg.configDir}/.openfang/config.toml"
+          TEMPLATE_DIR="${cfg.configDir}/.openfang/agents/custom/${lib.toLower cfg.agentName}"
+
+          # Install template
+          mkdir -p "$TEMPLATE_DIR"
+          cp /etc/openfang/agent-manifest.toml "$TEMPLATE_DIR/agent.toml"
+          echo "[sync] Installed ${cfg.agentName} template to $TEMPLATE_DIR/agent.toml"
 
           # Wait for API readiness
           for i in $(seq 1 30); do
@@ -259,44 +265,19 @@ in
             sleep 2
           done
 
-          MANIFEST=$(cat /etc/openfang/agent-manifest.toml)
-
-          # Create default agent if none exist
-          AGENT_COUNT=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq 'length')
-          if [ "$AGENT_COUNT" = "0" ] || [ -z "$AGENT_COUNT" ]; then
-            echo "[sync] No agents found, spawning ${cfg.agentName} from manifest..."
-            $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
-          fi
-
-          # Kill all agents and re-spawn from manifest to apply changes
+          # Kill existing agents and recreate from template
           AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
           for AGENT_ID in $AGENTS; do
-            echo "[sync] Killing agent $AGENT_ID for re-spawn..."
+            echo "[sync] Killing agent $AGENT_ID..."
             $OPENFANG_BIN agent kill --config "$OPENFANG_CONFIG" "$AGENT_ID" 2>/dev/null || true
           done
 
-          # Re-spawn fresh from manifest
-          echo "[sync] Spawning ${cfg.agentName} from manifest..."
-          $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
-
-          # Apply manifest update via API (spawn doesn't set system_prompt)
-          sleep 1
-          AGENTS=$(${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq -r '.[].id')
-          for AGENT_ID in $AGENTS; do
-            echo "[sync] Applying manifest to agent $AGENT_ID..."
-            RESP=$(${pkgs.curl}/bin/curl -s -X PUT "$OPENFANG_API/api/agents/$AGENT_ID/update" \
-              -H "Content-Type: application/json" \
-              -d "{\"manifest_toml\": $(echo "$MANIFEST" | ${pkgs.jq}/bin/jq -Rs .)}")
-            echo "[sync] Response: $RESP"
-
-            # Restart agent to apply (API says restart required)
-            $OPENFANG_BIN agent kill --config "$OPENFANG_CONFIG" "$AGENT_ID" 2>/dev/null || true
-            sleep 1
-            $OPENFANG_BIN agent spawn --config "$OPENFANG_CONFIG" /etc/openfang/agent-manifest.toml
-          done
+          # Create agent from template
+          echo "[sync] Creating ${cfg.agentName} from template..."
+          $OPENFANG_BIN agent new --config "$OPENFANG_CONFIG" ${lib.toLower cfg.agentName}
 
           # Verify
-          ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[] | {id, name}'
+          ${pkgs.curl}/bin/curl -s "$OPENFANG_API/api/agents" | ${pkgs.jq}/bin/jq '.[0]'
         '';
       };
     };
