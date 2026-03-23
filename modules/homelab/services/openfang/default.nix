@@ -294,8 +294,7 @@ in
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
           export PATH=${pkgs.nodejs_22}/bin:$PATH
-          cd ${cfg.dataDir}/whatsapp-gateway/packages/whatsapp-gateway
-          exec ${pkgs.nodejs_22}/bin/node index.js
+          exec ${pkgs.nodejs_22}/bin/node ${cfg.dataDir}/whatsapp-gateway/packages/whatsapp-gateway/index.js
         '';
         Restart = "on-failure";
         RestartSec = 5;
