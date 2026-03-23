@@ -229,7 +229,7 @@ in
           export ${fb.apiKeyEnvVar}=$(cat ${fb.apiKeyFile})
           '') cfg.fallbackProviders}
           export HOME=${cfg.configDir}
-          exec ${cfg.configDir}/.openfang/bin/openfang start --config ${cfg.configDir}/.openfang/config.toml
+          exec ${cfg.configDir}/.openfang/bin/openfang start --yolo --config ${cfg.configDir}/.openfang/config.toml
         '';
         Restart = "on-failure";
         RestartSec = 10;
