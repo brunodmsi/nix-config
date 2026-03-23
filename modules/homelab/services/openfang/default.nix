@@ -143,18 +143,23 @@ in
       };
     };
 
-    # Agent manifest template — used by bridge to create per-user agents
+    # Agent manifest template — used to spawn agents via CLI
     environment.etc."openfang/agent-manifest.toml".text = ''
-      [agent]
       name = "${cfg.agentName}"
-      system_prompt = """
-      ${cfg.systemPrompt}
-      """
+      version = "0.1.0"
+      description = "${cfg.agentName} WhatsApp assistant"
+      author = "bmasi"
+      module = "builtin:chat"
 
-      [default_model]
+      [model]
       provider = "${cfg.llmProvider}"
       model = "${cfg.llmModel}"
       api_key_env = "${cfg.apiKeyEnvVar}"
+      max_tokens = 4096
+      temperature = 0.3
+      system_prompt = """
+      ${cfg.systemPrompt}
+      """
     '';
 
     # Generate config.toml
