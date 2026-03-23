@@ -16,11 +16,12 @@ let
         sys.exit(0)
 
     # 1. Fix DM replies: use remoteJid directly (LID JIDs are valid for sending)
-    #    The original code strips @lid and adds @s.whatsapp.net which breaks LID replies
-    src = src.replace(
-        "const replyJid = isGroup ? remoteJid : senderJid.replace(/@.*$/, '''') + '@s.whatsapp.net';",
-        "// PATCHED_V5\n          const replyJid = isGroup ? remoteJid : remoteJid;"
-    )
+    lines = src.split('\n')
+    for i, line in enumerate(lines):
+        if 'const replyJid' in line and 's.whatsapp.net' in line:
+            lines[i] = '          const replyJid = remoteJid; // PATCHED_V5: reply to remoteJid directly'
+            break
+    src = '\n'.join(lines)
 
     # 2. Add dedup + logging after pushName
     old_push = "const pushName = msg.pushName || phone;"
