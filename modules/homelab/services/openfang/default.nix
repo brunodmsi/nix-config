@@ -11,83 +11,37 @@ let
     import sys, pathlib
     f = pathlib.Path(sys.argv[1])
     src = f.read_text()
-    if "PATCHED_V4" in src:
+    if "PATCHED_V5" in src:
         print("[patch] Already patched")
         sys.exit(0)
 
-    # 1. Add LID→phone cache and resolve function after state variables
-    cache_code = """
-// PATCHED_V4: LID-to-phone cache + dedup + logging
-const lidToPhone = new Map();
-const seenMsgs = new Set();
-
-function resolvePhone(msg, remoteJid) {
-  const lid = remoteJid.replace(/@.*$/, '');
-  // Try senderPn first
-  if (msg.key.senderPn) {
-    const phone = msg.key.senderPn.replace(/@.*$/, '');
-    lidToPhone.set(lid, phone);
-    return msg.key.senderPn;
-  }
-  // Check cache
-  if (lidToPhone.has(lid)) {
-    return lidToPhone.get(lid) + '@s.whatsapp.net';
-  }
-  // Fallback to LID (will fail for replies but at least logs it)
-  return remoteJid;
-}
-"""
+    # 1. Fix DM replies: use remoteJid directly (LID JIDs are valid for sending)
+    #    The original code strips @lid and adds @s.whatsapp.net which breaks LID replies
     src = src.replace(
-        "let sock = null;",
-        cache_code + "let sock = null;"
+        "const replyJid = isGroup ? remoteJid : senderJid.replace(/@.*$/, '') + '@s.whatsapp.net';",
+        "// PATCHED_V5\n          const replyJid = isGroup ? remoteJid : remoteJid;"
     )
 
-    # 2. Replace senderJid to use resolvePhone
-    src = src.replace(
-        "const senderJid = isGroup ? (msg.key.participant || '') : remoteJid;",
-        "const senderJid = isGroup ? (msg.key.participant || '') : resolvePhone(msg, remoteJid);"
-    )
-
-    # 3. Add dedup + logging after pushName
+    # 2. Add dedup + logging after pushName
     old_push = "const pushName = msg.pushName || phone;"
     new_push = old_push + """
+      // PATCHED_V5: dedup + logging
       const msgId = msg.key.id;
-      if (seenMsgs.has(msgId)) { console.log('[gateway] DEDUP: skipping ' + msgId); continue; }
-      seenMsgs.add(msgId);
-      if (seenMsgs.size > 1000) seenMsgs.clear();
-      console.log('[gateway] MSG ' + msgId + ' | remoteJid=' + remoteJid + ' | senderPn=' + (msg.key.senderPn || 'none') + ' | resolved=' + senderJid + ' | phone=' + phone);"""
+      if (!globalThis._seen) globalThis._seen = new Set();
+      if (globalThis._seen.has(msgId)) { console.log('[gateway] DEDUP: skipping ' + msgId); continue; }
+      globalThis._seen.add(msgId);
+      if (globalThis._seen.size > 1000) globalThis._seen.clear();
+      console.log('[gateway] MSG ' + msgId + ' | remoteJid=' + remoteJid + ' | senderPn=' + (msg.key.senderPn || 'none'));"""
     src = src.replace(old_push, new_push)
 
-    # 4. Add reply JID logging
+    # 3. Reply logging
     src = src.replace(
         "await sock.sendMessage(replyJid",
         "console.log('[gateway] REPLY: sending to ' + replyJid); await sock.sendMessage(replyJid"
     )
 
-    # 5. Also capture senderPn from decrypt errors (appears in error JSON)
-    # Add a listener to build the cache from all message events
-    cache_builder = """
-  // Build LID→phone cache from all incoming message keys
-  sock.ev.on('messages.upsert', ({ messages: msgs }) => {
-    for (const m of msgs) {
-      if (m.key.senderPn && m.key.remoteJid) {
-        const lid = m.key.remoteJid.replace(/@.*$/, '');
-        const phone = m.key.senderPn.replace(/@.*$/, '');
-        if (!lidToPhone.has(lid)) {
-          lidToPhone.set(lid, phone);
-          console.log('[gateway] CACHE: mapped LID ' + lid + ' -> phone ' + phone);
-        }
-      }
-    }
-  });
-"""
-    src = src.replace(
-        "sock.ev.on('creds.update', saveCreds);",
-        "sock.ev.on('creds.update', saveCreds);\n" + cache_builder
-    )
-
     f.write_text(src)
-    print("[patch] Gateway patched (V4: LID cache + dedup + logging)")
+    print("[patch] Gateway patched (V5: reply to remoteJid directly + dedup)")
   '';
 in
 {
