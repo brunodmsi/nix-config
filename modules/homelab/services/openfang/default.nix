@@ -144,23 +144,26 @@ in
     };
 
     # Agent manifest template — used to spawn agents via CLI
-    environment.etc."openfang/agent-manifest.toml".text = ''
-      name = "${cfg.agentName}"
-      version = "0.1.0"
-      description = "${cfg.agentName} WhatsApp assistant"
-      author = "bmasi"
-      module = "builtin:chat"
-      system_prompt = """
-      ${cfg.systemPrompt}
-      """
+    environment.etc."openfang/agent-manifest.toml".text =
+      let
+        # Escape system prompt for TOML: replace newlines with \n for single-line string
+        escapedPrompt = lib.replaceStrings [ "\n" "\"" "\\" ] [ "\\n" "\\\"" "\\\\" ] cfg.systemPrompt;
+      in
+      ''
+        name = "${cfg.agentName}"
+        version = "0.1.0"
+        description = "${cfg.agentName} WhatsApp assistant"
+        author = "bmasi"
+        module = "builtin:chat"
 
-      [model]
-      provider = "${cfg.llmProvider}"
-      model = "${cfg.llmModel}"
-      api_key_env = "${cfg.apiKeyEnvVar}"
-      max_tokens = 4096
-      temperature = 0.3
-    '';
+        [model]
+        provider = "${cfg.llmProvider}"
+        model = "${cfg.llmModel}"
+        api_key_env = "${cfg.apiKeyEnvVar}"
+        max_tokens = 4096
+        temperature = 0.3
+        system_prompt = "${escapedPrompt}"
+      '';
 
     # Generate config.toml
     environment.etc."openfang/config.toml".text = ''
