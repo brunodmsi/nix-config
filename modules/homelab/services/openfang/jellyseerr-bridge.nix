@@ -119,7 +119,7 @@ let
         CHANNEL="$2"
         CHAN_USER=$(normalize_phone "$3")
 
-        RESULTS=$(psql -t -A -F'|' -c "SELECT mr.jellyseerr_request_id, mr.title, mr.media_type, mr.status FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE cu.channel = '$CHANNEL' AND cu.channel_user_id = '$CHAN_USER' ORDER BY mr.requested_at DESC LIMIT 10;" "$DB")
+        RESULTS=$(psql -t -A -F'|' -c "SELECT mr.jellyseerr_request_id, mr.title, mr.media_type, mr.tmdb_id FROM media_requests mr JOIN channel_users cu ON mr.channel_user_id = cu.id WHERE cu.channel = '$CHANNEL' AND cu.channel_user_id = '$CHAN_USER' AND mr.status != 'cancelled' ORDER BY mr.requested_at DESC LIMIT 10;" "$DB")
 
         if [ -z "$RESULTS" ]; then
           echo "No requests found."
@@ -127,18 +127,44 @@ let
         fi
 
         echo "Your requests:"
-        echo "$RESULTS" | while IFS='|' read -r REQ_ID TITLE MTYPE STATUS; do
-          # Check live status from Jellyseerr
-          LIVE=$(curl -s "$API_URL/request/$REQ_ID" -H "X-Api-Key: $API_KEY" 2>/dev/null)
-          LIVE_STATUS=$(echo "$LIVE" | jq -r '.status // empty' 2>/dev/null)
-          case "$LIVE_STATUS" in
-            1) DISPLAY_STATUS="pending" ;;
-            2) DISPLAY_STATUS="approved" ;;
-            3) DISPLAY_STATUS="declined" ;;
-            4) DISPLAY_STATUS="available" ;;
-            *) DISPLAY_STATUS="$STATUS" ;;
+        echo "$RESULTS" | while IFS='|' read -r REQ_ID TITLE MTYPE TMDB_ID; do
+          # Get live status from Jellyseerr media endpoint
+          if [ "$MTYPE" = "movie" ]; then
+            MEDIA=$(curl -s "$API_URL/movie/$TMDB_ID" -H "X-Api-Key: $API_KEY" 2>/dev/null)
+          else
+            MEDIA=$(curl -s "$API_URL/tv/$TMDB_ID" -H "X-Api-Key: $API_KEY" 2>/dev/null)
+          fi
+
+          MEDIA_STATUS=$(echo "$MEDIA" | jq -r '.mediaInfo.status // 0' 2>/dev/null)
+          case "$MEDIA_STATUS" in
+            1) DISPLAY_STATUS="pending approval" ;;
+            2) DISPLAY_STATUS="processing" ;;
+            3) DISPLAY_STATUS="available" ;;
+            4) DISPLAY_STATUS="partially available" ;;
+            5) DISPLAY_STATUS="available" ;;
+            *) DISPLAY_STATUS="unknown" ;;
           esac
-          echo "- $TITLE ($MTYPE) | Status: $DISPLAY_STATUS | ID: $REQ_ID"
+
+          # For TV, show per-season status
+          SEASON_INFO=""
+          if [ "$MTYPE" = "tv" ]; then
+            SEASON_INFO=$(echo "$MEDIA" | jq -r '
+              [.mediaInfo.seasons // [] | .[] |
+                "S" + (.seasonNumber | tostring) + ": " +
+                (if .status == 5 then "available"
+                 elif .status == 4 then "partially available"
+                 elif .status == 3 then "available"
+                 elif .status == 2 then "processing"
+                 elif .status == 1 then "pending"
+                 else "unknown" end)
+              ] | join(", ")' 2>/dev/null)
+          fi
+
+          if [ -n "$SEASON_INFO" ]; then
+            echo "- $TITLE ($MTYPE) | $DISPLAY_STATUS | Seasons: $SEASON_INFO | ID: $REQ_ID"
+          else
+            echo "- $TITLE ($MTYPE) | $DISPLAY_STATUS | ID: $REQ_ID"
+          fi
         done
         ;;
 
