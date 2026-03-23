@@ -34,6 +34,7 @@ in
         OPENFANG_BIN = "${cfg.configDir}/.openfang/bin/openfang";
         OPENFANG_CONFIG = "${cfg.configDir}/.openfang/config.toml";
         MANIFEST_PATH = "/etc/openfang/agent-manifest.toml";
+        ALLOWED_SENDERS_FILE = cfg.allowedSendersFile;
       };
       serviceConfig = {
         ExecStart = "${pkgs.nodejs_22}/bin/node ${routerScript}";

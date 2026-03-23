@@ -34,7 +34,7 @@ let
   '';
 in
 {
-  imports = [ ./evolution-bridge.nix ./jellyseerr-bridge.nix ./message-router.nix ];
+  imports = [ ./database.nix ./jellyseerr-bridge.nix ./message-router.nix ];
 
   options.homelab.services.openfang = {
     enable = lib.mkEnableOption "OpenFang AI Agent";

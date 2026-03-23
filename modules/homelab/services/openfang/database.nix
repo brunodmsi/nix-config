@@ -1,4 +1,4 @@
-# PostgreSQL database for OpenFang integrations (Jellyseerr tracking)
+# PostgreSQL database for OpenFang (agent routing + Jellyseerr tracking)
 {
   config,
   lib,

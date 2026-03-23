@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import http from 'node:http';
+import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const ROUTER_PORT = parseInt(process.env.ROUTER_PORT || '50052');
@@ -9,6 +10,28 @@ const MANIFEST_PATH = process.env.MANIFEST_PATH || '/etc/openfang/agent-manifest
 const OPENFANG_BIN = process.env.OPENFANG_BIN || '/persist/openfang/.openfang/bin/openfang';
 const OPENFANG_CONFIG = process.env.OPENFANG_CONFIG || '/persist/openfang/.openfang/config.toml';
 const HOME_DIR = process.env.HOME || '/persist/openfang';
+const ALLOWED_SENDERS_FILE = process.env.ALLOWED_SENDERS_FILE || '';
+
+function loadAllowedSenders() {
+  if (!ALLOWED_SENDERS_FILE) return null; // no file = allow all
+  try {
+    return fs.readFileSync(ALLOWED_SENDERS_FILE, 'utf8')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'));
+  } catch (e) {
+    console.error('[router] Could not read allowed senders file:', e.message);
+    return null;
+  }
+}
+
+function isSenderAllowed(sender) {
+  const allowed = loadAllowedSenders();
+  if (!allowed) return true; // no file = allow all
+  // Check if sender phone (e.g. +559184519877) contains any allowed number
+  const stripped = sender.replace(/\+/g, '');
+  return allowed.some(num => stripped.includes(num.replace(/\+/g, '')));
+}
 
 function psql(query) {
   try {
@@ -128,6 +151,14 @@ const server = http.createServer(async (req, res) => {
   if (!sender) {
     // No sender metadata (e.g., dashboard chat) — pass through
     proxyRequest(req, res, OPENFANG_API + req.url, body);
+    return;
+  }
+
+  // Check allowed senders
+  if (!isSenderAllowed(sender)) {
+    console.log('[router] REJECTED: ' + sender + ' not in allowed senders');
+    res.writeHead(403);
+    res.end(JSON.stringify({ error: 'Sender not allowed' }));
     return;
   }
 
