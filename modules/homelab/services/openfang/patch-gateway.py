@@ -1,4 +1,4 @@
-import sys, pathlib, re
+import sys, pathlib
 
 f = pathlib.Path(sys.argv[1])
 src = f.read_text()
@@ -38,21 +38,21 @@ if "PATCHED_V7" not in src:
 
 # --- V8: Image download + multimodal forwarding ---
 
-# 4. Add imports: fs and downloadMediaMessage
+# 4. Add fs import at the top
 if "import fs from" not in src:
     src = src.replace(
         "import makeWASocket",
         "import fs from 'fs'; // PATCHED_V8\nimport makeWASocket"
     )
 
-# downloadMediaMessage — add alongside existing baileys import
+# 5. Add downloadMediaMessage to baileys import
 if "downloadMediaMessage" not in src:
     src = src.replace(
         "} from '@whiskeysockets/baileys';",
         ", downloadMediaMessage } from '@whiskeysockets/baileys'; // PATCHED_V8"
     )
 
-# 5. Create media dir constant
+# 6. Create media dir constant
 if "MEDIA_DIR" not in src:
     src = src.replace(
         "let qrDataUrl = '';",
@@ -61,8 +61,7 @@ if "MEDIA_DIR" not in src:
         "try { fs.mkdirSync(MEDIA_DIR, { recursive: true }); } catch {}"
     )
 
-# 6. Replace image placeholder with actual download
-# Match the [Image received] handler and replace with download logic
+# 7. Replace image placeholder with download logic
 if "[Image received]" in src:
     src = src.replace(
         "if (m?.imageMessage) text = '[Image received]' + (m.imageMessage.caption ? ': ' + m.imageMessage.caption : '');",
@@ -82,31 +81,67 @@ if "[Image received]" in src:
         }"""
     )
 
-# 7. In forwardToOpenFang, include image in payload for multimodal support
-# Find the payload construction and add images field
+# 8. Replace forwardToOpenFang payload to support images
+# Find the exact original payload pattern and replace the whole block
+OLD_FORWARD = """    const payload = JSON.stringify({
+      message: text,
+      metadata: metadata || {
+        channel: 'whatsapp',
+        sender: phone,
+        sender_name: pushName,
+        remote_jid: remoteJid,
+      },
+    });"""
+
+NEW_FORWARD = """    // PATCHED_V8: multimodal payload with image support
+    const imgB64 = (metadata || {}).__image_b64;
+    if (imgB64) delete metadata.__image_b64;
+    const payloadObj = {
+      message: text,
+      metadata: metadata || {
+        channel: 'whatsapp',
+        sender: phone,
+        sender_name: pushName,
+        remote_jid: remoteJid,
+      },
+    };
+    if (imgB64) payloadObj.images = [imgB64];
+    const payload = JSON.stringify(payloadObj);"""
+
 if "payloadObj" not in src:
-    src = src.replace(
-        "const payload = JSON.stringify({\n      message: text,",
-        "// PATCHED_V8: multimodal payload\n"
-        "    const imgB64 = (metadata || {}).__image_b64;\n"
-        "    if (imgB64) delete metadata.__image_b64; // don't send huge base64 in metadata\n"
-        "    const payloadObj = {\n      message: text,"
-    )
-    # Replace the closing of JSON.stringify
-    # Find: metadata closing -> });  and replace with adding images
-    src = src.replace(
-        "const payload = JSON.stringify(payloadObj);",
-        "SHOULD_NOT_MATCH"  # safety — don't double-patch
-    )
-    # Use regex to find the end of the payload object and stringify
-    src = re.sub(
-        r'(},\s*?\n\s*?\});',
-        r"""},\n    };\n"""
-        """    if (imgB64) payloadObj.images = [imgB64]; // PATCHED_V8\n"""
-        """    const payload = JSON.stringify(payloadObj);""",
-        src,
-        count=1
-    )
+    # Try exact match first
+    if OLD_FORWARD in src:
+        src = src.replace(OLD_FORWARD, NEW_FORWARD)
+    else:
+        # Fallback: find the payload line and do a line-by-line replacement
+        lines = src.split('\n')
+        for i, line in enumerate(lines):
+            if 'const payload = JSON.stringify({' in line and i + 8 < len(lines):
+                # Find the closing });
+                end = i + 1
+                while end < len(lines) and '});' not in lines[end]:
+                    end += 1
+                # Replace from i to end (inclusive)
+                indent = '    '
+                new_lines = [
+                    f'{indent}// PATCHED_V8: multimodal payload with image support',
+                    f'{indent}const imgB64 = (metadata || {}).__image_b64;',
+                    f'{indent}if (imgB64) delete metadata.__image_b64;',
+                    f'{indent}const payloadObj = {{',
+                    f'{indent}  message: text,',
+                    f'{indent}  metadata: metadata || {{',
+                    f'{indent}    channel: \'whatsapp\',',
+                    f'{indent}    sender: phone,',
+                    f'{indent}    sender_name: pushName,',
+                    f'{indent}    remote_jid: remoteJid,',
+                    f'{indent}  }},',
+                    f'{indent}}};',
+                    f'{indent}if (imgB64) payloadObj.images = [imgB64];',
+                    f'{indent}const payload = JSON.stringify(payloadObj);',
+                ]
+                lines[i:end + 1] = new_lines
+                src = '\n'.join(lines)
+                break
 
 f.write_text(src)
 print("[patch] Gateway patched (V8: image download + multimodal forwarding)")
