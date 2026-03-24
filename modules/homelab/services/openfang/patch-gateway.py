@@ -61,27 +61,48 @@ if "MEDIA_DIR" not in src:
         "try { fs.mkdirSync(MEDIA_DIR, { recursive: true }); } catch {}"
     )
 
-# 7. Replace image placeholder with download logic
-if "[Image received]" in src:
+# 7. Remove imageMessage.caption from initial text extraction so image handler runs
+if "imageMessage?.caption" in src and "PATCHED_V8_CAPTION" not in src:
     src = src.replace(
-        "if (m?.imageMessage) text = '[Image received]' + (m.imageMessage.caption ? ': ' + m.imageMessage.caption : '');",
-        """if (m?.imageMessage) { // PATCHED_V8: download image
-          const caption = m.imageMessage.caption || '';
-          try {
-            const buffer = await downloadMediaMessage(msg, 'buffer', {});
-            const fname = Date.now() + '.jpg';
-            fs.writeFileSync(MEDIA_DIR + '/' + fname, buffer);
-            metadata.__image_b64 = 'data:' + (m.imageMessage.mimetype || 'image/jpeg') + ';base64,' + buffer.toString('base64');
-            text = caption || '[User sent an image]';
-            console.log('[gateway] Downloaded image: ' + fname + ' (' + buffer.length + ' bytes)');
-          } catch (e) {
-            console.error('[gateway] Image download failed:', e.message);
-            text = '[Image received but download failed]' + (caption ? ': ' + caption : '');
-          }
-        }"""
+        "|| msg.message?.imageMessage?.caption",
+        "// PATCHED_V8_CAPTION: removed — image handler below deals with caption"
     )
 
-# 8. Replace forwardToOpenFang payload to support images
+# 8. Replace image placeholder with download logic
+# Also handle the case where text was already set from caption (move image check before if(!text))
+if "[Image received]" in src:
+    # Replace the old image handler inside if(!text)
+    src = src.replace(
+        "if (m?.imageMessage) text = '[Image received]' + (m.imageMessage.caption ? ': ' + m.imageMessage.caption : '');",
+        "if (m?.imageMessage) { text = '[Image received]'; } // placeholder, handled below"
+    )
+
+# Add image download AFTER the if(!text) block, before the sender extraction
+# This runs for ALL image messages regardless of caption
+if "PATCHED_V8_IMG_DL" not in src:
+    src = src.replace(
+        "      // For groups: real sender is in participant",
+        """      // PATCHED_V8_IMG_DL: download image if present
+      if (msg.message?.imageMessage) {
+        const imgMsg = msg.message.imageMessage;
+        const caption = imgMsg.caption || '';
+        try {
+          const buffer = await downloadMediaMessage(msg, 'buffer', {});
+          const fname = Date.now() + '.jpg';
+          fs.writeFileSync(MEDIA_DIR + '/' + fname, buffer);
+          metadata.__image_b64 = 'data:' + (imgMsg.mimetype || 'image/jpeg') + ';base64,' + buffer.toString('base64');
+          if (!text || text === '[Image received]') text = caption || '[User sent an image]';
+          console.log('[gateway] Downloaded image: ' + fname + ' (' + buffer.length + ' bytes)');
+        } catch (e) {
+          console.error('[gateway] Image download failed:', e.message);
+          if (!text || text === '[Image received]') text = '[Image received but download failed]' + (caption ? ': ' + caption : '');
+        }
+      }
+
+      // For groups: real sender is in participant"""
+    )
+
+# 9. Replace forwardToOpenFang payload to support images
 # Find the exact original payload pattern and replace the whole block
 OLD_FORWARD = """    const payload = JSON.stringify({
       message: text,
