@@ -75,6 +75,21 @@ in
         default = 28981;
       };
     };
+    nextcloud = {
+      enable = lib.mkEnableOption "Nextcloud skill (notes, calendar, tasks)";
+      apiKeyFile = lib.mkOption {
+        type = lib.types.path;
+        description = "Path to file containing the Nextcloud app password";
+      };
+      user = lib.mkOption {
+        type = lib.types.str;
+        default = "bmasi";
+      };
+      port = lib.mkOption {
+        type = lib.types.int;
+        default = 8009;
+      };
+    };
     fallbackProviders = lib.mkOption {
       type = lib.types.listOf (lib.types.submodule {
         options = {

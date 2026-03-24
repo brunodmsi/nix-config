@@ -125,6 +125,10 @@
           shell_exec: /persist/openfang/scripts/paperless-tool.sh COMMAND [ARG]
           Commands: search QUERY, recent [N], tags, info ID
 
+          ## Nextcloud (Notes, Calendar, Tasks)
+          shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG]
+          Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week], tasks, task-add TEXT
+
           ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.
 
@@ -158,7 +162,7 @@
           Delete request:
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
-        skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" ];
+        skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" "homelab-nextcloud" ];
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
@@ -175,6 +179,10 @@
         paperless = {
           enable = true;
           apiKeyFile = config.age.secrets.paperlessApiKey.path;
+        };
+        nextcloud = {
+          enable = true;
+          apiKeyFile = config.age.secrets.nextcloudAppPassword.path;
         };
       };
       # Monitoring

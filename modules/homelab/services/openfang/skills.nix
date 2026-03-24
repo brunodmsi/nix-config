@@ -690,6 +690,378 @@ let
     cp ${paperlessSkillPy} $out/src/main.py
   '';
 
+  # --- homelab-nextcloud skill (Phase 5) ---
+  ncCfg = cfg.nextcloud;
+  nextcloudBaseUrl = "http://127.0.0.1:${toString ncCfg.port}";
+
+  nextcloudSkillToml = pkgs.writeText "homelab-nextcloud-skill.toml" ''
+    [skill]
+    name = "homelab-nextcloud"
+    version = "0.1.0"
+    description = "Nextcloud notes, bookmark capture, and calendar"
+    author = "bmasi"
+    tags = ["homelab", "nextcloud", "notes", "calendar"]
+
+    [runtime]
+    type = "python"
+    entry = "src/main.py"
+
+    [[tools.provided]]
+    name = "nextcloud_notes"
+    description = "List or search notes. Use when user asks about notes or saved links."
+    input_schema = { type = "object", properties = { search = { type = "string", description = "Optional search query" } } }
+
+    [[tools.provided]]
+    name = "nextcloud_note_add"
+    description = "Create a new note. Use when user says 'save this', 'remember this', 'note this down'."
+    input_schema = { type = "object", properties = { title = { type = "string", description = "Note title" }, content = { type = "string", description = "Note content" } }, required = ["title"] }
+
+    [[tools.provided]]
+    name = "nextcloud_calendar"
+    description = "Show upcoming calendar events. Use when user asks about schedule, meetings, or what's coming up."
+    input_schema = { type = "object", properties = { range = { type = "string", description = "today, tomorrow, or week (default: today)" } } }
+
+    [[tools.provided]]
+    name = "nextcloud_tasks"
+    description = "List tasks/todos from Nextcloud Tasks app."
+    input_schema = { type = "object", properties = {} }
+
+    [[tools.provided]]
+    name = "nextcloud_task_add"
+    description = "Add a new task/todo. Use when user says 'add to my todo list', 'remind me to'."
+    input_schema = { type = "object", properties = { text = { type = "string", description = "Task description" } }, required = ["text"] }
+  '';
+
+  nextcloudSkillPy = pkgs.writeText "homelab-nextcloud-main.py" ''
+    #!/usr/bin/env python3
+    """homelab-nextcloud skill — Nextcloud notes, calendar, tasks for OpenFang."""
+    import json
+    import sys
+    import urllib.request
+    import urllib.error
+    import urllib.parse
+    import base64
+    import xml.etree.ElementTree as ET
+    from datetime import datetime, timedelta
+
+    BASE_URL = "${nextcloudBaseUrl}"
+    API_KEY_FILE = "${ncCfg.apiKeyFile}"
+    USER = "${ncCfg.user}"
+
+
+    def get_auth_header():
+        try:
+            with open(API_KEY_FILE) as f:
+                password = f.read().strip()
+            creds = base64.b64encode(f"{USER}:{password}".encode()).decode()
+            return f"Basic {creds}"
+        except Exception:
+            return None
+
+
+    def nc_request(path, method="GET", data=None, content_type="application/json"):
+        auth = get_auth_header()
+        if not auth:
+            return {"error": "Cannot read Nextcloud credentials"}
+        url = f"{BASE_URL}{path}"
+        if data and isinstance(data, dict):
+            data = json.dumps(data).encode()
+        elif data and isinstance(data, str):
+            data = data.encode()
+        req = urllib.request.Request(url, data=data, method=method)
+        req.add_header("Authorization", auth)
+        req.add_header("Accept", "application/json")
+        req.add_header("OCS-APIRequest", "true")
+        if data:
+            req.add_header("Content-Type", content_type)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = resp.read()
+                if not body:
+                    return {"ok": True}
+                try:
+                    return json.loads(body)
+                except json.JSONDecodeError:
+                    return {"raw": body.decode(errors="replace")}
+        except urllib.error.HTTPError as e:
+            return {"error": f"HTTP {e.code}: {e.reason}"}
+        except Exception as e:
+            return {"error": str(e)}
+
+
+    def nc_propfind(path, body, depth="1"):
+        auth = get_auth_header()
+        if not auth:
+            return {"error": "Cannot read Nextcloud credentials"}
+        url = f"{BASE_URL}{path}"
+        req = urllib.request.Request(url, data=body.encode(), method="PROPFIND")
+        req.add_header("Authorization", auth)
+        req.add_header("Depth", depth)
+        req.add_header("Content-Type", "application/xml; charset=utf-8")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.read().decode(errors="replace")
+        except urllib.error.HTTPError as e:
+            try:
+                return e.read().decode(errors="replace")
+            except:
+                return f"HTTP {e.code}: {e.reason}"
+        except Exception as e:
+            return str(e)
+
+
+    def nc_report(path, body):
+        auth = get_auth_header()
+        if not auth:
+            return "Cannot read Nextcloud credentials"
+        url = f"{BASE_URL}{path}"
+        req = urllib.request.Request(url, data=body.encode(), method="REPORT")
+        req.add_header("Authorization", auth)
+        req.add_header("Depth", "1")
+        req.add_header("Content-Type", "application/xml; charset=utf-8")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.read().decode(errors="replace")
+        except urllib.error.HTTPError as e:
+            try:
+                return e.read().decode(errors="replace")
+            except:
+                return f"HTTP {e.code}: {e.reason}"
+        except Exception as e:
+            return str(e)
+
+
+    # --- Notes (JSON API) ---
+
+    def nextcloud_notes(inp):
+        search = inp.get("search", "")
+        path = "/index.php/apps/notes/api/v1/notes"
+        if search:
+            path += f"?search={urllib.parse.quote(search)}"
+        data = nc_request(path)
+        if isinstance(data, dict) and "error" in data:
+            return data["error"]
+        if not isinstance(data, list):
+            return f"Unexpected response: {str(data)[:200]}"
+        if not data:
+            return "No notes found." + (f" (searched: '{search}')" if search else "")
+        lines = [f"Notes ({len(data)}):"]
+        for note in data[:15]:
+            title = note.get("title", "Untitled")
+            modified = (note.get("modified") or "")
+            if isinstance(modified, int):
+                modified = datetime.fromtimestamp(modified).strftime("%Y-%m-%d")
+            category = note.get("category", "")
+            cat_str = f" [{category}]" if category else ""
+            lines.append(f"- {title}{cat_str} ({modified})")
+        return "\n".join(lines)
+
+
+    def nextcloud_note_add(inp):
+        title = inp.get("title", "")
+        content = inp.get("content", "")
+        if not title:
+            return "Error: title is required"
+        data = nc_request(
+            "/index.php/apps/notes/api/v1/notes",
+            method="POST",
+            data={"title": title, "content": content}
+        )
+        if isinstance(data, dict) and "error" in data:
+            return data["error"]
+        note_id = data.get("id", "?") if isinstance(data, dict) else "?"
+        return f"Note created: '{title}' (ID: {note_id})"
+
+
+    # --- Calendar (CalDAV) ---
+
+    def nextcloud_calendar(inp):
+        range_str = inp.get("range", "today")
+        now = datetime.now()
+        if range_str == "tomorrow":
+            start = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+            end = start + timedelta(days=1)
+        elif range_str == "week":
+            start = now.replace(hour=0, minute=0, second=0)
+            end = start + timedelta(days=7)
+        else:  # today
+            start = now.replace(hour=0, minute=0, second=0)
+            end = start + timedelta(days=1)
+
+        start_str = start.strftime("%Y%m%dT%H%M%SZ")
+        end_str = end.strftime("%Y%m%dT%H%M%SZ")
+
+        body = f"""<?xml version="1.0" encoding="utf-8"?>
+        <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+          <d:prop><d:getetag /><c:calendar-data /></d:prop>
+          <c:filter>
+            <c:comp-filter name="VCALENDAR">
+              <c:comp-filter name="VEVENT">
+                <c:time-range start="{start_str}" end="{end_str}"/>
+              </c:comp-filter>
+            </c:comp-filter>
+          </c:filter>
+        </c:calendar-query>"""
+
+        result = nc_report(f"/remote.php/dav/calendars/{USER}/personal/", body)
+        if "error" in result.lower()[:50] or "HTTP" in result[:10]:
+            return f"Calendar query failed: {result[:200]}"
+
+        # Parse iCal events from the multistatus XML
+        events = []
+        try:
+            root = ET.fromstring(result)
+            ns = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
+            for resp in root.findall(".//d:response", ns):
+                cal_data = resp.find(".//c:calendar-data", ns)
+                if cal_data is not None and cal_data.text:
+                    ical = cal_data.text
+                    summary = ""
+                    dtstart = ""
+                    for line in ical.split("\n"):
+                        line = line.strip()
+                        if line.startswith("SUMMARY:"):
+                            summary = line[8:]
+                        elif line.startswith("DTSTART"):
+                            dtstart = line.split(":")[-1]
+                    if summary:
+                        # Parse time
+                        time_str = ""
+                        if "T" in dtstart:
+                            try:
+                                dt = datetime.strptime(dtstart[:15], "%Y%m%dT%H%M%S")
+                                time_str = dt.strftime("%H:%M")
+                            except:
+                                time_str = dtstart
+                        events.append(f"- {time_str} {summary}" if time_str else f"- {summary}")
+        except ET.ParseError:
+            return f"Failed to parse calendar response"
+
+        if not events:
+            return f"No events for {range_str}."
+
+        events.sort()
+        return f"Events for {range_str}:\n" + "\n".join(events)
+
+
+    # --- Tasks (CalDAV VTODO) ---
+
+    def nextcloud_tasks(inp):
+        body = """<?xml version="1.0" encoding="utf-8"?>
+        <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+          <d:prop><d:getetag /><c:calendar-data /></d:prop>
+          <c:filter>
+            <c:comp-filter name="VCALENDAR">
+              <c:comp-filter name="VTODO">
+                <c:prop-filter name="STATUS">
+                  <c:text-match negate-condition="yes">COMPLETED</c:text-match>
+                </c:prop-filter>
+              </c:comp-filter>
+            </c:comp-filter>
+          </c:filter>
+        </c:calendar-query>"""
+
+        result = nc_report(f"/remote.php/dav/calendars/{USER}/tasks/", body)
+        if "error" in result.lower()[:50] or "HTTP" in result[:10]:
+            return f"Tasks query failed: {result[:200]}"
+
+        tasks = []
+        try:
+            root = ET.fromstring(result)
+            ns = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
+            for resp in root.findall(".//d:response", ns):
+                cal_data = resp.find(".//c:calendar-data", ns)
+                if cal_data is not None and cal_data.text:
+                    summary = ""
+                    priority = ""
+                    for line in cal_data.text.split("\n"):
+                        line = line.strip()
+                        if line.startswith("SUMMARY:"):
+                            summary = line[8:]
+                        elif line.startswith("PRIORITY:"):
+                            priority = line[9:]
+                    if summary:
+                        prio = f" [P{priority}]" if priority and priority != "0" else ""
+                        tasks.append(f"- {summary}{prio}")
+        except ET.ParseError:
+            return "Failed to parse tasks response"
+
+        if not tasks:
+            return "No open tasks."
+        return f"Open tasks ({len(tasks)}):\n" + "\n".join(tasks)
+
+
+    def nextcloud_task_add(inp):
+        text = inp.get("text", "")
+        if not text:
+            return "Error: task text is required"
+
+        uid = f"openfang-{int(datetime.now().timestamp())}"
+        now_str = datetime.now().strftime("%Y%m%dT%H%M%SZ")
+        vtodo = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//OpenFang//Fluzy//EN
+BEGIN:VTODO
+UID:{uid}
+DTSTAMP:{now_str}
+CREATED:{now_str}
+SUMMARY:{text}
+STATUS:NEEDS-ACTION
+END:VTODO
+END:VCALENDAR"""
+
+        auth = get_auth_header()
+        if not auth:
+            return "Cannot read Nextcloud credentials"
+        url = f"{BASE_URL}/remote.php/dav/calendars/{USER}/tasks/{uid}.ics"
+        req = urllib.request.Request(url, data=vtodo.encode(), method="PUT")
+        req.add_header("Authorization", auth)
+        req.add_header("Content-Type", "text/calendar; charset=utf-8")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return f"Task added: '{text}'"
+        except urllib.error.HTTPError as e:
+            return f"Failed to add task: HTTP {e.code}"
+        except Exception as e:
+            return f"Failed to add task: {e}"
+
+
+    TOOLS = {
+        "nextcloud_notes": nextcloud_notes,
+        "nextcloud_note_add": nextcloud_note_add,
+        "nextcloud_calendar": nextcloud_calendar,
+        "nextcloud_tasks": nextcloud_tasks,
+        "nextcloud_task_add": nextcloud_task_add,
+    }
+
+
+    def main():
+        req = json.loads(sys.stdin.readline())
+        tool = req.get("tool", "")
+        inp = req.get("input", {})
+
+        handler = TOOLS.get(tool)
+        if not handler:
+            print(json.dumps({"error": f"Unknown tool: {tool}"}))
+            return
+
+        try:
+            result = handler(inp)
+            print(json.dumps({"result": result}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+
+
+    if __name__ == "__main__":
+        main()
+  '';
+
+  nextcloudSkill = pkgs.runCommand "homelab-nextcloud-skill" {} ''
+    mkdir -p $out/src
+    cp ${nextcloudSkillToml} $out/skill.toml
+    cp ${nextcloudSkillPy} $out/src/main.py
+  '';
+
   # --- Shell wrapper scripts for shell_exec (avoids pipe/metachar issues) ---
 
   # Paperless CLI wrapper
@@ -788,6 +1160,42 @@ let
     esac
   '';
 
+  # Nextcloud CLI wrapper
+  nextcloudToolScript = pkgs.writeShellScript "nextcloud-tool" ''
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    SKILL_PY="${skillsDir}/homelab-nextcloud/src/main.py"
+    CMD="$1"
+    shift
+    ARG="$*"
+    case "$CMD" in
+      notes)
+        if [ -n "$ARG" ]; then
+          echo "{\"tool\":\"nextcloud_notes\",\"input\":{\"search\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        else
+          echo "{\"tool\":\"nextcloud_notes\",\"input\":{}}" | python3 "$SKILL_PY"
+        fi
+        ;;
+      note-add)
+        TITLE="$1"
+        shift
+        CONTENT="$*"
+        echo "{\"tool\":\"nextcloud_note_add\",\"input\":{\"title\":\"$TITLE\",\"content\":\"$CONTENT\"}}" | python3 "$SKILL_PY"
+        ;;
+      calendar)
+        echo "{\"tool\":\"nextcloud_calendar\",\"input\":{\"range\":\"''${ARG:-today}\"}}" | python3 "$SKILL_PY"
+        ;;
+      tasks)
+        echo "{\"tool\":\"nextcloud_tasks\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      task-add)
+        echo "{\"tool\":\"nextcloud_task_add\",\"input\":{\"text\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        ;;
+      *)
+        echo "Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week], tasks, task-add TEXT"
+        ;;
+    esac
+  '';
+
   # All skills to install
   skills = [
     { name = "ping-test"; path = pingTestSkill; }
@@ -796,6 +1204,8 @@ let
     { name = "homelab-media"; path = mediaSkill; }
   ] ++ lib.optionals (cfg.paperless.enable) [
     { name = "homelab-paperless"; path = paperlessSkill; }
+  ] ++ lib.optionals (cfg.nextcloud.enable) [
+    { name = "homelab-nextcloud"; path = nextcloudSkill; }
   ];
 
   installSkillsScript = pkgs.writeShellScript "openfang-install-skills" ''
@@ -824,6 +1234,7 @@ in
       "L+ /persist/openfang/scripts/server-tool.sh - - - - ${serverToolScript}"
       "L+ /persist/openfang/scripts/media-tool.sh - - - - ${mediaToolScript}"
       "L+ /persist/openfang/scripts/paperless-tool.sh - - - - ${paperlessToolScript}"
+      "L+ /persist/openfang/scripts/nextcloud-tool.sh - - - - ${nextcloudToolScript}"
     ];
 
     # Install/update skills on every rebuild

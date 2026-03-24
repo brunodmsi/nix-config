@@ -118,6 +118,7 @@
       paperlessPassword.file = "${inputs.secrets}/paperlessPassword.age";
       jellyfinApiKey.file = "${inputs.secrets}/jellyfinApiKey.age";
       paperlessApiKey.file = "${inputs.secrets}/paperlessApiKey.age";
+      nextcloudAppPassword.file = "${inputs.secrets}/nextcloudAppPassword.age";
     };
   };
 
