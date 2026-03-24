@@ -53,6 +53,17 @@ in
         default = 3011;
       };
     };
+    jellyfin = {
+      enable = lib.mkEnableOption "Jellyfin media skill";
+      apiKeyFile = lib.mkOption {
+        type = lib.types.path;
+        description = "Path to file containing the Jellyfin API key";
+      };
+      port = lib.mkOption {
+        type = lib.types.int;
+        default = 8096;
+      };
+    };
     fallbackProviders = lib.mkOption {
       type = lib.types.listOf (lib.types.submodule {
         options = {

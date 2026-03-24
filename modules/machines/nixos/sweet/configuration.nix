@@ -116,6 +116,7 @@
       jellyseerrApiKey.file = "${inputs.secrets}/jellyseerrApiKey.age";
       whatsappAllowedSenders.file = "${inputs.secrets}/whatsappAllowedSenders.age";
       paperlessPassword.file = "${inputs.secrets}/paperlessPassword.age";
+      jellyfinApiKey.file = "${inputs.secrets}/jellyfinApiKey.age";
     };
   };
 

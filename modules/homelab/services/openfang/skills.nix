@@ -241,10 +241,333 @@ let
     cp ${serverSkillPy} $out/src/main.py
   '';
 
+  # --- homelab-media skill (Phase 3) ---
+  jfCfg = cfg.jellyfin;
+  jellyfinApiUrl = "http://127.0.0.1:${toString jfCfg.port}";
+
+  mediaSkillToml = pkgs.writeText "homelab-media-skill.toml" ''
+    [skill]
+    name = "homelab-media"
+    version = "0.1.0"
+    description = "Jellyfin media management — watch suggestions, cleanup, streaming stats"
+    author = "bmasi"
+    tags = ["homelab", "media", "jellyfin"]
+
+    [runtime]
+    type = "python"
+    entry = "src/main.py"
+
+    [[tools.provided]]
+    name = "media_unwatched"
+    description = "List unwatched movies or shows. Use when user asks what to watch or wants recommendations."
+    input_schema = { type = "object", properties = { type = { type = "string", description = "movies or shows (default: movies)" }, limit = { type = "integer", description = "Max results (default: 10)" } } }
+
+    [[tools.provided]]
+    name = "media_suggest"
+    description = "Random suggestion from unwatched content. Use when user asks 'what should I watch?' or wants a surprise pick."
+    input_schema = { type = "object", properties = { type = { type = "string", description = "movies or shows (default: movies)" }, genre = { type = "string", description = "Optional genre filter, e.g. Action, Comedy, Drama" } } }
+
+    [[tools.provided]]
+    name = "media_finished"
+    description = "Fully watched shows with disk size. Use when user asks about cleanup or finished content."
+    input_schema = { type = "object", properties = {} }
+
+    [[tools.provided]]
+    name = "media_cleanup"
+    description = "Delete a media item from Jellyfin library. ALWAYS confirm with user before calling this."
+    input_schema = { type = "object", properties = { item_id = { type = "string", description = "Jellyfin item ID to delete" } }, required = ["item_id"] }
+
+    [[tools.provided]]
+    name = "media_sessions"
+    description = "Show active streaming sessions — who is watching what right now."
+    input_schema = { type = "object", properties = {} }
+
+    [[tools.provided]]
+    name = "media_stats"
+    description = "Library overview — total, watched, unwatched counts for movies and shows."
+    input_schema = { type = "object", properties = {} }
+
+    [[tools.provided]]
+    name = "media_transcode_activity"
+    description = "Active transcoding sessions — codec, bitrate, resolution, client info."
+    input_schema = { type = "object", properties = {} }
+  '';
+
+  mediaSkillPy = pkgs.writeText "homelab-media-main.py" ''
+    #!/usr/bin/env python3
+    """homelab-media skill — Jellyfin media management for OpenFang."""
+    import json
+    import os
+    import random
+    import sys
+    import urllib.request
+    import urllib.error
+
+    API_URL = "${jellyfinApiUrl}"
+    API_KEY_FILE = "${jfCfg.apiKeyFile}"
+
+
+    def get_api_key():
+        try:
+            with open(API_KEY_FILE) as f:
+                return f.read().strip()
+        except Exception as e:
+            return None
+
+
+    def jf_request(path, method="GET"):
+        api_key = get_api_key()
+        if not api_key:
+            return {"error": "Cannot read Jellyfin API key"}
+        url = f"{API_URL}{path}"
+        req = urllib.request.Request(url, method=method)
+        req.add_header("Authorization", f'MediaBrowser Token="{api_key}"')
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if method == "DELETE":
+                    return {"ok": True}
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return {"error": f"HTTP {e.code}: {e.reason}"}
+        except Exception as e:
+            return {"error": str(e)}
+
+
+    def format_size(bytes_val):
+        if not bytes_val:
+            return "unknown"
+        gb = bytes_val / (1024 ** 3)
+        if gb >= 1:
+            return f"{gb:.1f} GB"
+        return f"{bytes_val / (1024 ** 2):.0f} MB"
+
+
+    def media_unwatched(inp):
+        media_type = inp.get("type", "movies")
+        limit = min(int(inp.get("limit", 10)), 25)
+        include_type = "Movie" if media_type == "movies" else "Series"
+
+        data = jf_request(f"/Items?IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit={limit}&Fields=Genres,RunTimeTicks")
+        if "error" in data:
+            return data["error"]
+
+        items = data.get("Items", [])
+        if not items:
+            return f"No unwatched {media_type} found."
+
+        lines = [f"Unwatched {media_type} ({len(items)}):"]
+        for item in items:
+            name = item.get("Name", "Unknown")
+            year = item.get("ProductionYear", "")
+            genres = ", ".join(item.get("Genres", [])[:3])
+            runtime = ""
+            ticks = item.get("RunTimeTicks")
+            if ticks:
+                mins = ticks // 600000000
+                runtime = f" ({mins}min)"
+            lines.append(f"- {name} ({year}) [{genres}]{runtime}")
+        return "\n".join(lines)
+
+
+    def media_suggest(inp):
+        media_type = inp.get("type", "movies")
+        genre = inp.get("genre", "")
+        include_type = "Movie" if media_type == "movies" else "Series"
+
+        path = f"/Items?IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&Limit=50&Fields=Genres,Overview,RunTimeTicks"
+        if genre:
+            path += f"&Genres={urllib.parse.quote(genre)}"
+
+        data = jf_request(path)
+        if "error" in data:
+            return data["error"]
+
+        items = data.get("Items", [])
+        if not items:
+            return f"No unwatched {media_type} found" + (f" in genre '{genre}'" if genre else "") + "."
+
+        pick = random.choice(items)
+        name = pick.get("Name", "Unknown")
+        year = pick.get("ProductionYear", "")
+        genres = ", ".join(pick.get("Genres", [])[:3])
+        overview = (pick.get("Overview") or "No description")[:200]
+        runtime = ""
+        ticks = pick.get("RunTimeTicks")
+        if ticks:
+            mins = ticks // 600000000
+            runtime = f"\nRuntime: {mins} min"
+
+        return f"How about: *{name}* ({year})\nGenre: {genres}{runtime}\n\n{overview}"
+
+
+    def media_finished(inp):
+        data = jf_request("/Items?IncludeItemTypes=Series&IsPlayed=true&Recursive=true&Fields=Path&Limit=50")
+        if "error" in data:
+            return data["error"]
+
+        items = data.get("Items", [])
+        if not items:
+            return "No fully watched shows found."
+
+        lines = ["Fully watched shows:"]
+        for item in items:
+            name = item.get("Name", "Unknown")
+            item_id = item.get("Id", "")
+            # Get size from item
+            size_data = jf_request(f"/Items/{item_id}?Fields=Size,Path")
+            size = ""
+            if not isinstance(size_data, dict) or "error" not in size_data:
+                size = format_size(size_data.get("Size", 0))
+            lines.append(f"- {name} | {size} | ID: {item_id}")
+        return "\n".join(lines)
+
+
+    def media_cleanup(inp):
+        item_id = inp.get("item_id", "")
+        if not item_id:
+            return "Error: item_id is required"
+
+        # Get item name first
+        item_data = jf_request(f"/Items/{item_id}")
+        if isinstance(item_data, dict) and "error" in item_data:
+            return item_data["error"]
+
+        name = item_data.get("Name", "Unknown")
+        result = jf_request(f"/Items/{item_id}", method="DELETE")
+        if isinstance(result, dict) and "error" in result:
+            return result["error"]
+        return f"Deleted: {name}"
+
+
+    def media_sessions(inp):
+        data = jf_request("/Sessions")
+        if "error" in data:
+            return data["error"]
+
+        active = [s for s in data if s.get("NowPlayingItem")]
+        if not active:
+            return "No active streaming sessions."
+
+        lines = ["Active sessions:"]
+        for s in active:
+            user = s.get("UserName", "Unknown")
+            item = s.get("NowPlayingItem", {})
+            title = item.get("Name", "Unknown")
+            series = item.get("SeriesName")
+            if series:
+                title = f"{series} - {title}"
+            client = s.get("Client", "Unknown")
+            device = s.get("DeviceName", "")
+
+            play_state = s.get("PlayState", {})
+            position = play_state.get("PositionTicks", 0)
+            duration = item.get("RunTimeTicks", 0)
+            progress = ""
+            if duration > 0:
+                pct = (position / duration) * 100
+                progress = f" ({pct:.0f}%)"
+
+            transcode = s.get("TranscodingInfo")
+            tc_info = ""
+            if transcode:
+                tc_info = f" [transcoding → {transcode.get('VideoCodec', '?')}]"
+
+            lines.append(f"- {user} on {client}/{device}: {title}{progress}{tc_info}")
+        return "\n".join(lines)
+
+
+    def media_stats(inp):
+        movies = jf_request("/Items/Counts")
+        if "error" in movies:
+            return movies["error"]
+
+        movie_count = movies.get("MovieCount", 0)
+        series_count = movies.get("SeriesCount", 0)
+        episode_count = movies.get("EpisodeCount", 0)
+
+        # Get unwatched counts
+        unwatched_movies = jf_request("/Items?IncludeItemTypes=Movie&IsPlayed=false&Recursive=true&Limit=0")
+        unwatched_series = jf_request("/Items?IncludeItemTypes=Series&IsPlayed=false&Recursive=true&Limit=0")
+
+        um = unwatched_movies.get("TotalRecordCount", "?") if not isinstance(unwatched_movies, str) else "?"
+        us = unwatched_series.get("TotalRecordCount", "?") if not isinstance(unwatched_series, str) else "?"
+
+        return f"Library stats:\nMovies: {movie_count} total ({um} unwatched)\nShows: {series_count} total ({us} unwatched)\nEpisodes: {episode_count}"
+
+
+    def media_transcode_activity(inp):
+        data = jf_request("/Sessions")
+        if "error" in data:
+            return data["error"]
+
+        transcoding = [s for s in data if s.get("TranscodingInfo")]
+        if not transcoding:
+            return "No active transcoding sessions."
+
+        lines = ["Active transcodes:"]
+        for s in transcoding:
+            user = s.get("UserName", "Unknown")
+            item = s.get("NowPlayingItem", {})
+            title = item.get("Name", "Unknown")
+            tc = s.get("TranscodingInfo", {})
+            video_codec = tc.get("VideoCodec", "?")
+            audio_codec = tc.get("AudioCodec", "?")
+            bitrate = tc.get("Bitrate", 0)
+            br_mbps = f"{bitrate / 1_000_000:.1f} Mbps" if bitrate else "?"
+            hw = "HW" if tc.get("IsVideoDirect") is False and tc.get("VideoDecoderIsHardware") else "SW"
+            reason = tc.get("TranscodeReasons", [])
+
+            lines.append(f"- {user}: {title}")
+            lines.append(f"  Video: {video_codec} ({hw}) | Audio: {audio_codec} | {br_mbps}")
+            if reason:
+                lines.append(f"  Reason: {', '.join(reason)}")
+        return "\n".join(lines)
+
+
+    TOOLS = {
+        "media_unwatched": media_unwatched,
+        "media_suggest": media_suggest,
+        "media_finished": media_finished,
+        "media_cleanup": media_cleanup,
+        "media_sessions": media_sessions,
+        "media_stats": media_stats,
+        "media_transcode_activity": media_transcode_activity,
+    }
+
+
+    def main():
+        req = json.loads(sys.stdin.readline())
+        tool = req.get("tool", "")
+        inp = req.get("input", {})
+
+        handler = TOOLS.get(tool)
+        if not handler:
+            print(json.dumps({"error": f"Unknown tool: {tool}"}))
+            return
+
+        try:
+            result = handler(inp)
+            print(json.dumps({"result": result}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+
+
+    if __name__ == "__main__":
+        main()
+  '';
+
+  mediaSkill = pkgs.runCommand "homelab-media-skill" {} ''
+    mkdir -p $out/src
+    cp ${mediaSkillToml} $out/skill.toml
+    cp ${mediaSkillPy} $out/src/main.py
+  '';
+
   # All skills to install
   skills = [
     { name = "ping-test"; path = pingTestSkill; }
     { name = "homelab-server"; path = serverSkill; }
+  ] ++ lib.optionals (cfg.jellyfin.enable) [
+    { name = "homelab-media"; path = mediaSkill; }
   ];
 
   installSkillsScript = pkgs.writeShellScript "openfang-install-skills" ''

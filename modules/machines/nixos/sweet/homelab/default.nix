@@ -123,6 +123,14 @@
           NOTE: snapraid sync and zpool scrub run automatically on schedule. Do NOT trigger them manually.
           If the user asks to run a sync, tell them it runs on schedule and show the last run status instead.
 
+          ## Media (homelab-media skill)
+          You have Jellyfin media tools. Use them when asked about:
+          - What to watch → media_unwatched, media_suggest
+          - Finished shows / cleanup → media_finished, media_cleanup
+          - Who's streaming → media_sessions, media_transcode_activity
+          - Library stats → media_stats
+          IMPORTANT: ALWAYS confirm with the user before using media_cleanup to delete anything.
+
           ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.
 
@@ -156,7 +164,7 @@
           Delete request:
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
-        skills = [ "ping-test" "homelab-server" ];
+        skills = [ "ping-test" "homelab-server" "homelab-media" ];
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
@@ -165,6 +173,10 @@
         jellyseerr = {
           enable = true;
           apiKeyFile = config.age.secrets.jellyseerrApiKey.path;
+        };
+        jellyfin = {
+          enable = true;
+          apiKeyFile = config.age.secrets.jellyfinApiKey.path;
         };
       };
       # Monitoring
