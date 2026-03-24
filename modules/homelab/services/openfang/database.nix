@@ -43,6 +43,16 @@ in
           ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS media_requests (id SERIAL PRIMARY KEY, jellyseerr_request_id TEXT, tmdb_id TEXT, title TEXT, media_type TEXT, channel_user_id INTEGER REFERENCES channel_users(id), status TEXT DEFAULT 'pending', requested_at TIMESTAMP DEFAULT NOW());" "$DB"
           ${pkgs.postgresql}/bin/psql -c "ALTER TABLE channel_users ADD COLUMN IF NOT EXISTS agent_id TEXT;" "$DB"
           ${pkgs.postgresql}/bin/psql -c "ALTER TABLE channel_users ADD COLUMN IF NOT EXISTS remote_jid TEXT;" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "ALTER TABLE channel_users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';" "$DB"
+
+          # Per-user service credentials
+          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS user_services (
+            id SERIAL PRIMARY KEY,
+            channel_user_id INTEGER REFERENCES channel_users(id),
+            service TEXT NOT NULL,
+            config JSONB NOT NULL DEFAULT '{}',
+            UNIQUE(channel_user_id, service)
+          );" "$DB"
         '';
       };
     };

@@ -117,8 +117,9 @@
           NOTE: snapraid sync and zpool scrub run automatically on schedule. Do NOT trigger them manually.
 
           ## Media (Jellyfin)
-          shell_exec: /persist/openfang/scripts/media-tool.sh COMMAND [ARG]
+          shell_exec: /persist/openfang/scripts/media-tool.sh COMMAND [ARG] [PHONE]
           Commands: unwatched [movies|shows], suggest [movies|shows], finished, cleanup ITEM_ID, stats
+          ALWAYS pass the sender's phone number as the last argument for per-user lookup.
           IMPORTANT: ALWAYS confirm with the user before using cleanup.
 
           ## Documents (Paperless-ngx)

@@ -295,7 +295,11 @@ let
 
     API_URL = "${jellyfinApiUrl}"
     API_KEY_FILE = "${jfCfg.apiKeyFile}"
-    USER_ID = "${jfCfg.userId}"
+    DEFAULT_USER_ID = "${jfCfg.userId}"
+
+
+    def get_user_id(inp):
+        return inp.get("user_id", DEFAULT_USER_ID)
 
 
     def get_api_key():
@@ -338,7 +342,7 @@ let
         limit = min(int(inp.get("limit", 10)), 25)
         include_type = "Movie" if media_type == "movies" else "Series"
 
-        data = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit={limit}&Fields=Genres,RunTimeTicks")
+        data = jf_request(f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit={limit}&Fields=Genres,RunTimeTicks")
         if "error" in data:
             return data["error"]
 
@@ -365,7 +369,7 @@ let
         genre = inp.get("genre", "")
         include_type = "Movie" if media_type == "movies" else "Series"
 
-        path = f"/Items?UserId={USER_ID}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&Limit=50&Fields=Genres,Overview,RunTimeTicks"
+        path = f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&Limit=50&Fields=Genres,Overview,RunTimeTicks"
         if genre:
             path += f"&Genres={urllib.parse.quote(genre)}"
 
@@ -392,7 +396,7 @@ let
 
 
     def media_finished(inp):
-        data = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes=Series&IsPlayed=true&Recursive=true&Fields=Path&Limit=50")
+        data = jf_request(f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes=Series&IsPlayed=true&Recursive=true&Fields=Path&Limit=50")
         if "error" in data:
             return data["error"]
 
@@ -440,8 +444,8 @@ let
         episode_count = movies.get("EpisodeCount", 0)
 
         # Get unwatched counts
-        unwatched_movies = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes=Movie&IsPlayed=false&Recursive=true&Limit=0")
-        unwatched_series = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes=Series&IsPlayed=false&Recursive=true&Limit=0")
+        unwatched_movies = jf_request(f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes=Movie&IsPlayed=false&Recursive=true&Limit=0")
+        unwatched_series = jf_request(f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes=Series&IsPlayed=false&Recursive=true&Limit=0")
 
         um = unwatched_movies.get("TotalRecordCount", "?") if not isinstance(unwatched_movies, str) else "?"
         us = unwatched_series.get("TotalRecordCount", "?") if not isinstance(unwatched_series, str) else "?"
@@ -1066,6 +1070,37 @@ END:VCALENDAR"""
     ${pkgs.gnused}/bin/sed 's/^    //' ${nextcloudSkillPy} > $out/src/main.py
   '';
 
+  # --- Shared user lookup for per-user service credentials ---
+  dbUrl = "postgresql://openfang@127.0.0.1:5432/openfang";
+
+  # Lookup service config for a phone number from user_services table
+  # Usage: eval "$(user-lookup.sh +559184519877 jellyfin)"
+  # Sets: SVC_CONFIG (JSON string), ROLE, CHANNEL_USER_ID
+  userLookupScript = pkgs.writeShellScript "user-lookup" ''
+    export PATH=${pkgs.coreutils}/bin:${pkgs.postgresql}/bin:${pkgs.jq}/bin:$PATH
+    PHONE="$1"
+    SERVICE="$2"
+    DB="${dbUrl}"
+
+    # Get channel user info
+    RESULT=$(psql -t -A -F'|' -c "SELECT cu.id, cu.role FROM channel_users cu WHERE cu.channel_user_id = '$PHONE' LIMIT 1;" "$DB" 2>/dev/null)
+    if [ -z "$RESULT" ]; then
+      echo "ROLE=unknown"
+      echo "CHANNEL_USER_ID="
+      echo "SVC_CONFIG={}"
+      exit 0
+    fi
+
+    CU_ID=$(echo "$RESULT" | cut -d'|' -f1)
+    ROLE=$(echo "$RESULT" | cut -d'|' -f2)
+    echo "ROLE=$ROLE"
+    echo "CHANNEL_USER_ID=$CU_ID"
+
+    # Get service-specific config
+    SVC=$(psql -t -A -c "SELECT config FROM user_services WHERE channel_user_id = $CU_ID AND service = '$SERVICE' LIMIT 1;" "$DB" 2>/dev/null)
+    echo "SVC_CONFIG=''${SVC:-\{\}}"
+  '';
+
   # --- Shell wrapper scripts for shell_exec (avoids pipe/metachar issues) ---
 
   # Paperless CLI wrapper
@@ -1138,28 +1173,41 @@ END:VCALENDAR"""
 
   # Media CLI wrapper
   mediaToolScript = pkgs.writeShellScript "media-tool" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:${pkgs.postgresql}/bin:${pkgs.jq}/bin:$PATH
     SKILL_PY="${skillsDir}/homelab-media/src/main.py"
     CMD="$1"
     ARG="$2"
+    PHONE="$3"
+
+    # Look up Jellyfin user_id for this phone number
+    JF_UID=""
+    if [ -n "$PHONE" ]; then
+      JF_UID=$(psql -t -A -c "SELECT config->>'user_id' FROM user_services us JOIN channel_users cu ON us.channel_user_id = cu.id WHERE cu.channel_user_id = '$PHONE' AND us.service = 'jellyfin' LIMIT 1;" "${dbUrl}" 2>/dev/null)
+    fi
+    UID_JSON=""
+    if [ -n "$JF_UID" ]; then
+      UID_JSON=",\"user_id\":\"$JF_UID\""
+    fi
+
     case "$CMD" in
       unwatched)
-        echo "{\"tool\":\"media_unwatched\",\"input\":{\"type\":\"''${ARG:-movies}\"}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"media_unwatched\",\"input\":{\"type\":\"''${ARG:-movies}\"$UID_JSON}}" | python3 "$SKILL_PY"
         ;;
       suggest)
-        echo "{\"tool\":\"media_suggest\",\"input\":{\"type\":\"''${ARG:-movies}\"}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"media_suggest\",\"input\":{\"type\":\"''${ARG:-movies}\"$UID_JSON}}" | python3 "$SKILL_PY"
         ;;
       finished)
-        echo "{\"tool\":\"media_finished\",\"input\":{}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"media_finished\",\"input\":{\"_\":0$UID_JSON}}" | python3 "$SKILL_PY"
         ;;
       cleanup)
-        echo "{\"tool\":\"media_cleanup\",\"input\":{\"item_id\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"media_cleanup\",\"input\":{\"item_id\":\"$ARG\"$UID_JSON}}" | python3 "$SKILL_PY"
         ;;
       stats)
-        echo "{\"tool\":\"media_stats\",\"input\":{}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"media_stats\",\"input\":{\"_\":0$UID_JSON}}" | python3 "$SKILL_PY"
         ;;
       *)
         echo "Commands: unwatched [movies|shows], suggest [movies|shows], finished, cleanup ITEM_ID, stats"
+        echo "Pass phone number as 3rd arg for per-user lookup"
         ;;
     esac
   '';
@@ -1233,6 +1281,7 @@ in
       "L+ /persist/openfang/scripts/media-tool.sh - - - - ${mediaToolScript}"
       "L+ /persist/openfang/scripts/paperless-tool.sh - - - - ${paperlessToolScript}"
       "L+ /persist/openfang/scripts/nextcloud-tool.sh - - - - ${nextcloudToolScript}"
+      "L+ /persist/openfang/scripts/user-lookup.sh - - - - ${userLookupScript}"
     ];
 
     # Install/update skills on every rebuild
