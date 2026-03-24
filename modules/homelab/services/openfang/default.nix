@@ -64,6 +64,17 @@ in
         default = 8096;
       };
     };
+    paperless = {
+      enable = lib.mkEnableOption "Paperless-ngx document skill";
+      apiKeyFile = lib.mkOption {
+        type = lib.types.path;
+        description = "Path to file containing the Paperless-ngx API token";
+      };
+      port = lib.mkOption {
+        type = lib.types.int;
+        default = 8000;
+      };
+    };
     fallbackProviders = lib.mkOption {
       type = lib.types.listOf (lib.types.submodule {
         options = {

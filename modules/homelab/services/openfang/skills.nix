@@ -484,12 +484,220 @@ let
     cp ${mediaSkillPy} $out/src/main.py
   '';
 
+  # --- homelab-paperless skill (Phase 4) ---
+  plCfg = cfg.paperless;
+  paperlessApiUrl = "http://127.0.0.1:${toString plCfg.port}";
+
+  paperlessSkillToml = pkgs.writeText "homelab-paperless-skill.toml" ''
+    [skill]
+    name = "homelab-paperless"
+    version = "0.1.0"
+    description = "Paperless-ngx document search and browsing"
+    author = "bmasi"
+    tags = ["homelab", "documents", "paperless"]
+
+    [runtime]
+    type = "python"
+    entry = "src/main.py"
+
+    [[tools.provided]]
+    name = "paperless_search"
+    description = "Full-text search across all documents. Use when user asks to find a document, bill, receipt, letter, etc."
+    input_schema = { type = "object", properties = { query = { type = "string", description = "Search query, e.g. 'electricity bill january'" } }, required = ["query"] }
+
+    [[tools.provided]]
+    name = "paperless_recent"
+    description = "List recently added documents. Use when user asks what was scanned recently."
+    input_schema = { type = "object", properties = { limit = { type = "integer", description = "Number of results (default: 5, max: 20)" } } }
+
+    [[tools.provided]]
+    name = "paperless_tags"
+    description = "List all tags with document counts. Use when user asks about document categories or tags."
+    input_schema = { type = "object", properties = {} }
+
+    [[tools.provided]]
+    name = "paperless_info"
+    description = "Get full details of a specific document by ID — title, date, correspondent, tags, content preview."
+    input_schema = { type = "object", properties = { id = { type = "integer", description = "Document ID" } }, required = ["id"] }
+  '';
+
+  paperlessSkillPy = pkgs.writeText "homelab-paperless-main.py" ''
+    #!/usr/bin/env python3
+    """homelab-paperless skill — Paperless-ngx document search for OpenFang."""
+    import json
+    import sys
+    import urllib.request
+    import urllib.error
+    import urllib.parse
+
+    API_URL = "${paperlessApiUrl}/api"
+    API_KEY_FILE = "${plCfg.apiKeyFile}"
+
+
+    def get_api_key():
+        try:
+            with open(API_KEY_FILE) as f:
+                return f.read().strip()
+        except Exception:
+            return None
+
+
+    def pl_request(path):
+        api_key = get_api_key()
+        if not api_key:
+            return {"error": "Cannot read Paperless API key"}
+        url = f"{API_URL}{path}"
+        req = urllib.request.Request(url)
+        req.add_header("Authorization", f"Token {api_key}")
+        req.add_header("Accept", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return {"error": f"HTTP {e.code}: {e.reason}"}
+        except Exception as e:
+            return {"error": str(e)}
+
+
+    def format_doc(doc):
+        title = doc.get("title", "Untitled")
+        doc_id = doc.get("id", "?")
+        created = (doc.get("created") or "")[:10]
+        correspondent = doc.get("correspondent_name") or doc.get("correspondent") or ""
+        tags = ", ".join(doc.get("tag_names", []) or [str(t) for t in doc.get("tags", [])])
+        line = f"- [{doc_id}] {title}"
+        if created:
+            line += f" ({created})"
+        if correspondent:
+            line += f" — {correspondent}"
+        if tags:
+            line += f" [{tags}]"
+        return line
+
+
+    def paperless_search(inp):
+        query = inp.get("query", "")
+        if not query:
+            return "Error: query is required"
+        encoded = urllib.parse.quote(query)
+        data = pl_request(f"/documents/?query={encoded}&ordering=-created&page_size=10")
+        if "error" in data:
+            return data["error"]
+
+        results = data.get("results", [])
+        if not results:
+            return f"No documents found for '{query}'."
+
+        total = data.get("count", len(results))
+        lines = [f"Found {total} document(s) for '{query}':"]
+        for doc in results:
+            lines.append(format_doc(doc))
+        return "\n".join(lines)
+
+
+    def paperless_recent(inp):
+        limit = min(int(inp.get("limit", 5)), 20)
+        data = pl_request(f"/documents/?ordering=-added&page_size={limit}")
+        if "error" in data:
+            return data["error"]
+
+        results = data.get("results", [])
+        if not results:
+            return "No documents found."
+
+        lines = [f"Last {len(results)} documents:"]
+        for doc in results:
+            lines.append(format_doc(doc))
+        return "\n".join(lines)
+
+
+    def paperless_tags(inp):
+        data = pl_request("/tags/?page_size=100")
+        if "error" in data:
+            return data["error"]
+
+        tags = data.get("results", [])
+        if not tags:
+            return "No tags found."
+
+        lines = ["Tags:"]
+        for tag in sorted(tags, key=lambda t: t.get("document_count", 0), reverse=True):
+            name = tag.get("name", "?")
+            count = tag.get("document_count", 0)
+            lines.append(f"- {name} ({count} docs)")
+        return "\n".join(lines)
+
+
+    def paperless_info(inp):
+        doc_id = inp.get("id")
+        if not doc_id:
+            return "Error: document id is required"
+        data = pl_request(f"/documents/{doc_id}/")
+        if "error" in data:
+            return data["error"]
+
+        title = data.get("title", "Untitled")
+        created = (data.get("created") or "")[:10]
+        added = (data.get("added") or "")[:10]
+        correspondent = data.get("correspondent_name") or "None"
+        doc_type = data.get("document_type_name") or "None"
+        tags = ", ".join(data.get("tag_names", [])) or "None"
+        content = (data.get("content") or "")[:500]
+
+        return (
+            f"*{title}*\n"
+            f"ID: {doc_id}\n"
+            f"Created: {created} | Added: {added}\n"
+            f"Correspondent: {correspondent}\n"
+            f"Type: {doc_type}\n"
+            f"Tags: {tags}\n"
+            f"\nContent preview:\n{content}"
+        )
+
+
+    TOOLS = {
+        "paperless_search": paperless_search,
+        "paperless_recent": paperless_recent,
+        "paperless_tags": paperless_tags,
+        "paperless_info": paperless_info,
+    }
+
+
+    def main():
+        req = json.loads(sys.stdin.readline())
+        tool = req.get("tool", "")
+        inp = req.get("input", {})
+
+        handler = TOOLS.get(tool)
+        if not handler:
+            print(json.dumps({"error": f"Unknown tool: {tool}"}))
+            return
+
+        try:
+            result = handler(inp)
+            print(json.dumps({"result": result}))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+
+
+    if __name__ == "__main__":
+        main()
+  '';
+
+  paperlessSkill = pkgs.runCommand "homelab-paperless-skill" {} ''
+    mkdir -p $out/src
+    cp ${paperlessSkillToml} $out/skill.toml
+    cp ${paperlessSkillPy} $out/src/main.py
+  '';
+
   # All skills to install
   skills = [
     { name = "ping-test"; path = pingTestSkill; }
     { name = "homelab-server"; path = serverSkill; }
   ] ++ lib.optionals (cfg.jellyfin.enable) [
     { name = "homelab-media"; path = mediaSkill; }
+  ] ++ lib.optionals (cfg.paperless.enable) [
+    { name = "homelab-paperless"; path = paperlessSkill; }
   ];
 
   installSkillsScript = pkgs.writeShellScript "openfang-install-skills" ''

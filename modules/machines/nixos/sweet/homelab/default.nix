@@ -130,6 +130,13 @@
           - Library stats → media_stats
           IMPORTANT: ALWAYS confirm with the user before using media_cleanup to delete anything.
 
+          ## Documents (homelab-paperless skill)
+          You have Paperless-ngx document tools. Use them when asked about:
+          - Finding documents → paperless_search (bills, receipts, letters, contracts)
+          - Recent scans → paperless_recent
+          - Document categories → paperless_tags
+          - Document details → paperless_info (by ID from search results)
+
           ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.
 
@@ -163,7 +170,7 @@
           Delete request:
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
-        skills = [ "ping-test" "homelab-server" "homelab-media" ];
+        skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" ];
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
@@ -176,6 +183,10 @@
         jellyfin = {
           enable = true;
           apiKeyFile = config.age.secrets.jellyfinApiKey.path;
+        };
+        paperless = {
+          enable = true;
+          apiKeyFile = config.age.secrets.paperlessApiKey.path;
         };
       };
       # Monitoring
