@@ -130,6 +130,7 @@ in
 
         identity_providers = lib.mkIf cfg.oidc.enable {
           oidc = {
+            issuer = "https://${autheliaUrl}";
             clients = map (c: {
               inherit (c) client_id client_name authorization_policy redirect_uris scopes;
               client_secret = "{{ secret \"${c.client_secret_hash_file}\" }}";
