@@ -537,9 +537,12 @@ let
 
     API_URL = "${paperlessApiUrl}/api"
     API_KEY_FILE = "${plCfg.apiKeyFile}"
+    _override_token = None
 
 
     def get_api_key():
+        if _override_token:
+            return _override_token
         try:
             with open(API_KEY_FILE) as f:
                 return f.read().strip()
@@ -669,9 +672,12 @@ let
 
 
     def main():
+        global _override_token
         req = json.loads(sys.stdin.readline())
         tool = req.get("tool", "")
         inp = req.get("input", {})
+        if inp.get("api_token"):
+            _override_token = inp.pop("api_token")
 
         handler = TOOLS.get(tool)
         if not handler:
@@ -752,13 +758,19 @@ let
     BASE_URL = "${nextcloudBaseUrl}"
     API_KEY_FILE = "${ncCfg.apiKeyFile}"
     USER = "${ncCfg.user}"
+    _override_user = None
+    _override_password = None
 
 
     def get_auth_header():
         try:
-            with open(API_KEY_FILE) as f:
-                password = f.read().strip()
-            creds = base64.b64encode(f"{USER}:{password}".encode()).decode()
+            user = _override_user or USER
+            if _override_password:
+                password = _override_password
+            else:
+                with open(API_KEY_FILE) as f:
+                    password = f.read().strip()
+            creds = base64.b64encode(f"{user}:{password}".encode()).decode()
             return f"Basic {creds}"
         except Exception:
             return None
@@ -1041,9 +1053,15 @@ END:VCALENDAR"""
 
 
     def main():
+        global _override_user, _override_password, USER
         req = json.loads(sys.stdin.readline())
         tool = req.get("tool", "")
         inp = req.get("input", {})
+        if inp.get("nc_user"):
+            _override_user = inp.pop("nc_user")
+            USER = _override_user  # also update USER for CalDAV paths
+        if inp.get("nc_password"):
+            _override_password = inp.pop("nc_password")
 
         handler = TOOLS.get(tool)
         if not handler:
@@ -1105,25 +1123,38 @@ END:VCALENDAR"""
 
   # Paperless CLI wrapper
   paperlessToolScript = pkgs.writeShellScript "paperless-tool" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:${pkgs.postgresql}/bin:${pkgs.jq}/bin:$PATH
     SKILL_PY="${skillsDir}/homelab-paperless/src/main.py"
     CMD="$1"
     ARG="$2"
+    PHONE="$3"
+
+    # Look up per-user Paperless API token
+    PL_TOKEN=""
+    if [ -n "$PHONE" ]; then
+      PL_TOKEN=$(psql -t -A -c "SELECT config->>'api_token' FROM user_services us JOIN channel_users cu ON us.channel_user_id = cu.id WHERE cu.channel_user_id = '$PHONE' AND us.service = 'paperless' LIMIT 1;" "${dbUrl}" 2>/dev/null)
+    fi
+    TOKEN_JSON=""
+    if [ -n "$PL_TOKEN" ]; then
+      TOKEN_JSON=",\"api_token\":\"$PL_TOKEN\""
+    fi
+
     case "$CMD" in
       search)
-        echo "{\"tool\":\"paperless_search\",\"input\":{\"query\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"paperless_search\",\"input\":{\"query\":\"$ARG\"$TOKEN_JSON}}" | python3 "$SKILL_PY"
         ;;
       recent)
-        echo "{\"tool\":\"paperless_recent\",\"input\":{\"limit\":''${ARG:-5}}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"paperless_recent\",\"input\":{\"limit\":''${ARG:-5}$TOKEN_JSON}}" | python3 "$SKILL_PY"
         ;;
       tags)
-        echo "{\"tool\":\"paperless_tags\",\"input\":{}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"paperless_tags\",\"input\":{\"_\":0$TOKEN_JSON}}" | python3 "$SKILL_PY"
         ;;
       info)
-        echo "{\"tool\":\"paperless_info\",\"input\":{\"id\":$ARG}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"paperless_info\",\"input\":{\"id\":$ARG$TOKEN_JSON}}" | python3 "$SKILL_PY"
         ;;
       *)
         echo "Commands: search QUERY, recent [N], tags, info ID"
+        echo "Pass phone number as 3rd arg for per-user lookup"
         ;;
     esac
   '';
@@ -1214,30 +1245,53 @@ END:VCALENDAR"""
 
   # Nextcloud CLI wrapper
   nextcloudToolScript = pkgs.writeShellScript "nextcloud-tool" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:${pkgs.postgresql}/bin:${pkgs.jq}/bin:$PATH
     SKILL_PY="${skillsDir}/homelab-nextcloud/src/main.py"
-    CMD="$1"
-    shift
-    ARG="$*"
+    # Last arg is phone if it starts with +
+    ARGS=("$@")
+    PHONE=""
+    LAST_IDX=$((''${#ARGS[@]} - 1))
+    if [[ "''${ARGS[$LAST_IDX]}" == +* ]]; then
+      PHONE="''${ARGS[$LAST_IDX]}"
+      unset 'ARGS[$LAST_IDX]'
+    fi
+    CMD="''${ARGS[0]}"
+    shift_args=("''${ARGS[@]:1}")
+    ARG="''${shift_args[*]}"
+
+    # Look up per-user Nextcloud credentials
+    NC_USER=""
+    NC_PASS=""
+    if [ -n "$PHONE" ]; then
+      NC_USER=$(psql -t -A -c "SELECT config->>'user' FROM user_services us JOIN channel_users cu ON us.channel_user_id = cu.id WHERE cu.channel_user_id = '$PHONE' AND us.service = 'nextcloud' LIMIT 1;" "${dbUrl}" 2>/dev/null)
+      NC_PASS=$(psql -t -A -c "SELECT config->>'password' FROM user_services us JOIN channel_users cu ON us.channel_user_id = cu.id WHERE cu.channel_user_id = '$PHONE' AND us.service = 'nextcloud' LIMIT 1;" "${dbUrl}" 2>/dev/null)
+    fi
+    NC_JSON=""
+    if [ -n "$NC_USER" ]; then
+      NC_JSON=",\"nc_user\":\"$NC_USER\""
+    fi
+    if [ -n "$NC_PASS" ]; then
+      NC_JSON="$NC_JSON,\"nc_password\":\"$NC_PASS\""
+    fi
     case "$CMD" in
       notes)
         if [ -n "$ARG" ]; then
-          echo "{\"tool\":\"nextcloud_notes\",\"input\":{\"search\":\"$ARG\"}}" | python3 "$SKILL_PY"
+          echo "{\"tool\":\"nextcloud_notes\",\"input\":{\"search\":\"$ARG\"$NC_JSON}}" | python3 "$SKILL_PY"
         else
-          echo "{\"tool\":\"nextcloud_notes\",\"input\":{}}" | python3 "$SKILL_PY"
+          echo "{\"tool\":\"nextcloud_notes\",\"input\":{\"_\":0$NC_JSON}}" | python3 "$SKILL_PY"
         fi
         ;;
       note-add)
-        TITLE="$1"
-        shift
-        CONTENT="$*"
-        echo "{\"tool\":\"nextcloud_note_add\",\"input\":{\"title\":\"$TITLE\",\"content\":\"$CONTENT\"}}" | python3 "$SKILL_PY"
+        TITLE="''${ARGS[1]}"
+        CONTENT="''${ARGS[*]:2}"
+        echo "{\"tool\":\"nextcloud_note_add\",\"input\":{\"title\":\"$TITLE\",\"content\":\"$CONTENT\"$NC_JSON}}" | python3 "$SKILL_PY"
         ;;
       calendar)
-        echo "{\"tool\":\"nextcloud_calendar\",\"input\":{\"range\":\"''${ARG:-today}\"}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"nextcloud_calendar\",\"input\":{\"range\":\"''${ARG:-today}\"$NC_JSON}}" | python3 "$SKILL_PY"
         ;;
       *)
         echo "Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]"
+        echo "Pass phone number as last arg for per-user lookup"
         ;;
     esac
   '';

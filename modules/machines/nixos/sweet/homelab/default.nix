@@ -123,12 +123,14 @@
           IMPORTANT: ALWAYS confirm with the user before using cleanup.
 
           ## Documents (Paperless-ngx)
-          shell_exec: /persist/openfang/scripts/paperless-tool.sh COMMAND [ARG]
+          shell_exec: /persist/openfang/scripts/paperless-tool.sh COMMAND [ARG] [PHONE]
           Commands: search QUERY, recent [N], tags, info ID
+          ALWAYS pass the sender's phone number as the last argument.
 
           ## Nextcloud (Notes, Calendar)
-          shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG]
+          shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG] [PHONE]
           Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]
+          ALWAYS pass the sender's phone number as the last argument.
 
           ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.
