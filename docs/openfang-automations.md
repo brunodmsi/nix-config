@@ -724,22 +724,48 @@ With skills providing tool definitions, trim the system prompt to:
 
 ---
 
+## Phase 7: Per-User Access Control & Hardening
+
+**Goal:** Map WhatsApp numbers to specific service accounts. Different users get different capabilities and access scoped to their own data.
+
+### Paperless access control
+- Each user gets their own Paperless API key (or shared key with user filtering)
+- Wrapper script reads sender phone from metadata, maps to Paperless user
+- User A can only search/view their own documents, not User B's
+
+### Nextcloud access control
+- Each user gets their own Nextcloud app password
+- Wrapper maps sender phone → Nextcloud user → correct credentials
+- Notes, calendar, tasks are scoped to the correct Nextcloud account
+
+### Implementation
+- Extend `channel_users` table with `role` and `service_credentials` columns (or a separate `user_services` table)
+- Message router already has per-sender routing — extend to pass user context to tools
+- Wrapper scripts read sender from `$SENDER` env var (set by message router or passed as arg)
+- DB lookup: `SELECT nextcloud_user, paperless_token FROM user_services WHERE phone = '$SENDER'`
+- Admin role gets all tools; family role gets media + notes only; guest gets media only
+
+### Agent manifest per role
+- Admin manifest: all tools (server, media, paperless, nextcloud, jellyseerr)
+- Family manifest: media-tool.sh + nextcloud-tool.sh (notes only)
+- Guest manifest: media-tool.sh (unwatched, suggest, stats — no cleanup)
+
+**When:** When adding more users beyond Bruno.
+
+---
+
 ## Future / Deferred
 
 ### Expense tracking via receipts
-**Blocked on:** Gateway image support. From WhatsApp chat, images arrive but Fluzy can't see them yet. Need to investigate how the gateway forwards image messages.
+**Blocked on:** OpenFang's `/api/agents/{id}/message` endpoint doesn't pass images to the LLM. Gateway can download images but can't forward them for vision. Would need to use the OpenAI-compatible `/v1/chat/completions` endpoint or a separate vision API call.
 **Depends on:** homelab-paperless skill.
 
 ### Daily standup
 "What did I do yesterday" — git commits, Paperless docs, calendar events.
 **Depends on:** Paperless + Nextcloud skills.
 
-### Per-user permissions
-Add `role` column to `channel_users`. Router selects manifest by role. Admin gets all skills, family gets media-only.
-**When:** When adding more users.
-
 ### Migrate Jellyseerr to a skill
-Convert `jellyseerr-tool.sh` from shell_exec to a proper Python skill.
+Convert `jellyseerr-tool.sh` from shell_exec to a proper Python skill with wrapper.
 **When:** After skill system is proven.
 
 ---
@@ -756,12 +782,13 @@ Convert `jellyseerr-tool.sh` from shell_exec to a proper Python skill.
 
 ## Implementation Order Summary
 
-| Phase | What | New timers? | New secrets? | Effort |
-|-------|------|-------------|-------------|--------|
-| 0 | Foundation: python3, wa-notify, ping test | No | No | Small |
-| 1 | homelab-server skill (10 tools) | No | No | Medium |
-| 2 | Notifications: hooks on existing services + 3 new timers | 3 timers | No | Medium |
-| 3 | homelab-media skill (7 tools) | No | jellyfinApiKey | Medium |
-| 4 | homelab-paperless skill (4 tools) | No | paperlessApiKey | Small |
-| 5 | homelab-nextcloud skill (3→6 tools) | No | nextcloudAppPassword | Medium-Large |
-| 6 | Bundled skills + prompt polish | No | No | Small |
+| Phase | What | Status | Effort |
+|-------|------|--------|--------|
+| 0 | Foundation: python3, wa-notify, ping test | Done | Small |
+| 1 | homelab-server skill (10 tools) | Done | Medium |
+| 2 | Notifications: hooks on existing services + 3 new timers | Done | Medium |
+| 3 | homelab-media skill (5 tools) | Done | Medium |
+| 4 | homelab-paperless skill (4 tools) | Done | Small |
+| 5 | homelab-nextcloud skill (5 tools: notes, calendar, tasks) | Done | Medium-Large |
+| 6 | Bundled skills + prompt polish | Pending | Small |
+| 7 | Per-user access control: phone→account mapping for Paperless/Nextcloud | Pending | Medium |
