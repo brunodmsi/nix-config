@@ -4,8 +4,8 @@ f = pathlib.Path(sys.argv[1])
 src = f.read_text()
 
 # Check which patches are already applied
-if "PATCHED_V8" in src:
-    print("[patch] Already at V8")
+if "PATCHED_V9" in src:
+    print("[patch] Already at V9")
     sys.exit(0)
 
 # If V7 not applied yet, apply V7 patches first
@@ -79,10 +79,10 @@ if "[Image received]" in src:
 
 # Add image download AFTER the if(!text) block, before the sender extraction
 # This runs for ALL image messages regardless of caption
-if "PATCHED_V8_IMG_DL" not in src:
+if "PATCHED_V9" not in src:
     src = src.replace(
         "      // For groups: real sender is in participant",
-        """      // PATCHED_V8_IMG_DL: download image if present
+        """      // PATCHED_V9: download image if present
       if (msg.message?.imageMessage) {
         const imgMsg = msg.message.imageMessage;
         const caption = imgMsg.caption || '';
@@ -165,4 +165,4 @@ if "payloadObj" not in src:
                 break
 
 f.write_text(src)
-print("[patch] Gateway patched (V8: image download + multimodal forwarding)")
+print("[patch] Gateway patched (V9: image download fix for captioned images)")
