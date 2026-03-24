@@ -248,7 +248,7 @@ let
   ];
 
   installSkillsScript = pkgs.writeShellScript "openfang-install-skills" ''
-    export PATH=${pkgs.coreutils}/bin:$PATH
+    export PATH=${pkgs.python3}/bin:${pkgs.coreutils}/bin:$PATH
     export HOME=${cfg.configDir}
 
     echo "[skills] Installing OpenFang skills..."
@@ -265,6 +265,9 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    # python3 must be in system PATH for OpenFang to run Python skills
+    environment.systemPackages = [ pkgs.python3 ];
+
     # Install/update skills on every rebuild
     systemd.services.openfang-install-skills = {
       description = "Install OpenFang skills";
