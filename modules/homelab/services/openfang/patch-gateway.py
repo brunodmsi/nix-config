@@ -80,9 +80,11 @@ if "[Image received]" in src:
 # Add image download AFTER the if(!text) block, before the sender extraction
 # This runs for ALL image messages regardless of caption
 if "PATCHED_V9" not in src:
+    # Store image base64 in a variable BEFORE metadata is created
     src = src.replace(
         "      // For groups: real sender is in participant",
-        """      // PATCHED_V9: download image if present
+        """      // PATCHED_V9: download image if present (before metadata is created)
+      let __imageB64 = null;
       if (msg.message?.imageMessage) {
         const imgMsg = msg.message.imageMessage;
         const caption = imgMsg.caption || '';
@@ -90,7 +92,7 @@ if "PATCHED_V9" not in src:
           const buffer = await downloadMediaMessage(msg, 'buffer', {});
           const fname = Date.now() + '.jpg';
           fs.writeFileSync(MEDIA_DIR + '/' + fname, buffer);
-          metadata.__image_b64 = 'data:' + (imgMsg.mimetype || 'image/jpeg') + ';base64,' + buffer.toString('base64');
+          __imageB64 = 'data:' + (imgMsg.mimetype || 'image/jpeg') + ';base64,' + buffer.toString('base64');
           if (!text || text === '[Image received]') text = caption || '[User sent an image]';
           console.log('[gateway] Downloaded image: ' + fname + ' (' + buffer.length + ' bytes)');
         } catch (e) {
@@ -100,6 +102,14 @@ if "PATCHED_V9" not in src:
       }
 
       // For groups: real sender is in participant"""
+    )
+
+    # Attach image to metadata AFTER metadata is created
+    src = src.replace(
+        "      if (isGroup) {",
+        "      // PATCHED_V9: attach image to metadata\n"
+        "      if (__imageB64) metadata.__image_b64 = __imageB64;\n\n"
+        "      if (isGroup) {"
     )
 
 # 9. Replace forwardToOpenFang payload to support images
