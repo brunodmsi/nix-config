@@ -125,9 +125,9 @@
           shell_exec: /persist/openfang/scripts/paperless-tool.sh COMMAND [ARG]
           Commands: search QUERY, recent [N], tags, info ID
 
-          ## Nextcloud (Notes, Calendar, Tasks)
+          ## Nextcloud (Notes, Calendar)
           shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG]
-          Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week], tasks, task-add TEXT
+          Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]
 
           ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.

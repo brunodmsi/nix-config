@@ -1184,14 +1184,8 @@ END:VCALENDAR"""
       calendar)
         echo "{\"tool\":\"nextcloud_calendar\",\"input\":{\"range\":\"''${ARG:-today}\"}}" | python3 "$SKILL_PY"
         ;;
-      tasks)
-        echo "{\"tool\":\"nextcloud_tasks\",\"input\":{}}" | python3 "$SKILL_PY"
-        ;;
-      task-add)
-        echo "{\"tool\":\"nextcloud_task_add\",\"input\":{\"text\":\"$ARG\"}}" | python3 "$SKILL_PY"
-        ;;
       *)
-        echo "Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week], tasks, task-add TEXT"
+        echo "Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]"
         ;;
     esac
   '';
