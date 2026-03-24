@@ -4,7 +4,10 @@
     "*.unrecoverable"
     "/tmp/"
     "/lost+found/"
-    "/Media/"
+    "/Media/Movies/"
+    "/Media/TV/"
+    "/Media/Music/"
+    "/Downloads/"
   ];
 
   systemd.services = lib.attrsets.optionalAttrs (config.services.snapraid.enable) {
