@@ -36,6 +36,36 @@ in
       default = [ ];
       description = "List of Caddy virtual host names to protect with Authelia";
     };
+    oidc = {
+      enable = lib.mkEnableOption "OIDC identity provider";
+      hmacSecretFile = lib.mkOption {
+        type = lib.types.path;
+        description = "Path to OIDC HMAC secret file";
+      };
+      issuerPrivateKeyFile = lib.mkOption {
+        type = lib.types.path;
+        description = "Path to OIDC issuer RSA private key file";
+      };
+      clients = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            client_id = lib.mkOption { type = lib.types.str; };
+            client_name = lib.mkOption { type = lib.types.str; };
+            client_secret_file = lib.mkOption { type = lib.types.path; };
+            authorization_policy = lib.mkOption {
+              type = lib.types.str;
+              default = "two_factor";
+            };
+            redirect_uris = lib.mkOption { type = lib.types.listOf lib.types.str; };
+            scopes = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ "openid" "profile" "email" ];
+            };
+          };
+        });
+        default = [ ];
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -45,6 +75,9 @@ in
         jwtSecretFile = cfg.jwtSecretFile;
         storageEncryptionKeyFile = cfg.storageEncryptionKeyFile;
         sessionSecretFile = cfg.sessionSecretFile;
+      } // lib.optionalAttrs cfg.oidc.enable {
+        oidcHmacSecretFile = cfg.oidc.hmacSecretFile;
+        oidcIssuerPrivateKeyFile = cfg.oidc.issuerPrivateKeyFile;
       };
       settings = {
         theme = "dark";
@@ -89,6 +122,18 @@ in
         notifier = {
           filesystem = {
             filename = "/var/lib/authelia-main/notifications.txt";
+          };
+        };
+
+        identity_providers = lib.mkIf cfg.oidc.enable {
+          oidc = {
+            clients = map (c: {
+              inherit (c) client_id client_name authorization_policy redirect_uris scopes;
+              client_secret = "$file://${c.client_secret_file}";
+              token_endpoint_auth_method = "client_secret_post";
+              grant_types = [ "authorization_code" ];
+              response_types = [ "code" ];
+            }) cfg.oidc.clients;
           };
         };
       };

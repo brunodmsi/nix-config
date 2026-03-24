@@ -93,6 +93,18 @@
         file = "${inputs.secrets}/autheliaUsersFile.age";
         owner = "authelia-main";
       };
+      autheliaOidcHmacSecret = {
+        file = "${inputs.secrets}/autheliaOidcHmacSecret.age";
+        owner = "authelia-main";
+      };
+      autheliaOidcIssuerPrivateKey = {
+        file = "${inputs.secrets}/autheliaOidcIssuerPrivateKey.age";
+        owner = "authelia-main";
+      };
+      immichOAuthClientSecret = {
+        file = "${inputs.secrets}/immichOAuthClientSecret.age";
+        owner = "authelia-main";
+      };
       mullvadWireguard.file = "${inputs.secrets}/mullvadWireguard.age";
       nextcloudAdminPassword.file = "${inputs.secrets}/nextcloudAdminPassword.age";
       hashedUserPassword.file = "${inputs.secrets}/hashedUserPassword.age";

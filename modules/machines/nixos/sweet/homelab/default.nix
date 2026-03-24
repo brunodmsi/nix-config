@@ -42,6 +42,25 @@
           "http://prometheus.demasi.dev"
           "http://agent.demasi.dev"
         ];
+        oidc = {
+          enable = true;
+          hmacSecretFile = config.age.secrets.autheliaOidcHmacSecret.path;
+          issuerPrivateKeyFile = config.age.secrets.autheliaOidcIssuerPrivateKey.path;
+          clients = [
+            {
+              client_id = "immich";
+              client_name = "Immich";
+              client_secret_file = config.age.secrets.immichOAuthClientSecret.path;
+              authorization_policy = "two_factor";
+              redirect_uris = [
+                "https://photos.demasi.dev/auth/login"
+                "https://photos.demasi.dev/user-settings"
+                "app.immich:///oauth-callback"
+              ];
+              scopes = [ "openid" "profile" "email" ];
+            }
+          ];
+        };
       };
       # Arr stack
       sonarr.enable = true;
