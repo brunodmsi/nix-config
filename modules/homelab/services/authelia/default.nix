@@ -51,7 +51,10 @@ in
           options = {
             client_id = lib.mkOption { type = lib.types.str; };
             client_name = lib.mkOption { type = lib.types.str; };
-            client_secret_file = lib.mkOption { type = lib.types.path; };
+            client_secret_hash_file = lib.mkOption {
+              type = lib.types.path;
+              description = "Path to file containing the pbkdf2-hashed client secret";
+            };
             authorization_policy = lib.mkOption {
               type = lib.types.str;
               default = "two_factor";
@@ -129,7 +132,7 @@ in
           oidc = {
             clients = map (c: {
               inherit (c) client_id client_name authorization_policy redirect_uris scopes;
-              client_secret = "$file://${c.client_secret_file}";
+              client_secret = "$file://${c.client_secret_hash_file}";
               token_endpoint_auth_method = "client_secret_post";
               grant_types = [ "authorization_code" ];
               response_types = [ "code" ];

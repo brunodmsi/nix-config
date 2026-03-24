@@ -50,7 +50,7 @@
             {
               client_id = "immich";
               client_name = "Immich";
-              client_secret_file = config.age.secrets.immichOAuthClientSecret.path;
+              client_secret_hash_file = config.age.secrets.immichOAuthClientSecretHash.path;
               authorization_policy = "two_factor";
               redirect_uris = [
                 "https://photos.demasi.dev/auth/login"

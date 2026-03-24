@@ -105,6 +105,10 @@
         file = "${inputs.secrets}/immichOAuthClientSecret.age";
         owner = "authelia-main";
       };
+      immichOAuthClientSecretHash = {
+        file = "${inputs.secrets}/immichOAuthClientSecretHash.age";
+        owner = "authelia-main";
+      };
       mullvadWireguard.file = "${inputs.secrets}/mullvadWireguard.age";
       nextcloudAdminPassword.file = "${inputs.secrets}/nextcloudAdminPassword.age";
       hashedUserPassword.file = "${inputs.secrets}/hashedUserPassword.age";
