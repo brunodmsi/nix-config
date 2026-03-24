@@ -1056,18 +1056,13 @@ END:VCALENDAR"""
         main()
   '';
 
-  nextcloudSkill = pkgs.runCommand "homelab-nextcloud-skill" {
-    nativeBuildInputs = [ pkgs.python3 ];
-  } ''
+  nextcloudSkill = pkgs.runCommand "homelab-nextcloud-skill" {} ''
     mkdir -p $out/src
     cp ${nextcloudSkillToml} $out/skill.toml
-    # Nix fails to strip indent from this file (XML f-strings confuse it)
-    # Use python to dedent instead of sed (handles mixed indentation correctly)
-    python3 -c "
-import textwrap, pathlib
-src = pathlib.Path('${nextcloudSkillPy}').read_text()
-pathlib.Path('$out/src/main.py').write_text(textwrap.dedent(src))
-"
+    # Nix doesn't strip indent from this file — strip 4 leading spaces
+    # This is safe because the Python code uses 4-space indentation internally,
+    # so function bodies go from 8 spaces to 4 spaces (correct)
+    ${pkgs.gnused}/bin/sed 's/^    //' ${nextcloudSkillPy} > $out/src/main.py
   '';
 
   # --- Shell wrapper scripts for shell_exec (avoids pipe/metachar issues) ---
