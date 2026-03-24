@@ -12,18 +12,16 @@
 
   systemd.services = lib.attrsets.optionalAttrs (config.services.snapraid.enable) {
     snapraid-sync = {
-      onFailure = lib.lists.optionals (config ? tg-notify && config.tg-notify.enable) [
-        "tg-notify@%i.service"
-      ];
+      onSuccess = [ "wa-notify@snapraid-sync.service" ];
+      onFailure = [ "wa-notify@snapraid-sync.service" ];
       serviceConfig = {
         RestrictNamespaces = lib.mkForce false;
         RestrictAddressFamilies = lib.mkForce "";
       };
     };
     snapraid-scrub = {
-      onFailure = lib.lists.optionals (config ? tg-notify && config.tg-notify.enable) [
-        "tg-notify@%i.service"
-      ];
+      onSuccess = [ "wa-notify@snapraid-scrub.service" ];
+      onFailure = [ "wa-notify@snapraid-scrub.service" ];
       serviceConfig = {
         RestrictNamespaces = lib.mkForce false;
         RestrictAddressFamilies = lib.mkForce "";

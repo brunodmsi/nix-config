@@ -213,6 +213,8 @@
   # Daily backup of critical data to data drive
   systemd.services.backup-to-hdd = {
     description = "Backup critical data to HDD";
+    onSuccess = [ "wa-notify@backup-to-hdd.service" ];
+    onFailure = [ "wa-notify@backup-to-hdd.service" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "backup-to-hdd" ''
