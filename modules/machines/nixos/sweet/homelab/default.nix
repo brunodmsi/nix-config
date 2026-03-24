@@ -175,6 +175,7 @@
         jellyfin = {
           enable = true;
           apiKeyFile = config.age.secrets.jellyfinApiKey.path;
+          userId = "6444a32ce54f40b5bfaf15dc1c62dc98";
         };
         paperless = {
           enable = true;

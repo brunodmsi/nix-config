@@ -295,6 +295,7 @@ let
 
     API_URL = "${jellyfinApiUrl}"
     API_KEY_FILE = "${jfCfg.apiKeyFile}"
+    USER_ID = "${jfCfg.userId}"
 
 
     def get_api_key():
@@ -337,7 +338,7 @@ let
         limit = min(int(inp.get("limit", 10)), 25)
         include_type = "Movie" if media_type == "movies" else "Series"
 
-        data = jf_request(f"/Items?IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit={limit}&Fields=Genres,RunTimeTicks")
+        data = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit={limit}&Fields=Genres,RunTimeTicks")
         if "error" in data:
             return data["error"]
 
@@ -364,7 +365,7 @@ let
         genre = inp.get("genre", "")
         include_type = "Movie" if media_type == "movies" else "Series"
 
-        path = f"/Items?IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&Limit=50&Fields=Genres,Overview,RunTimeTicks"
+        path = f"/Items?UserId={USER_ID}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&Limit=50&Fields=Genres,Overview,RunTimeTicks"
         if genre:
             path += f"&Genres={urllib.parse.quote(genre)}"
 
@@ -391,7 +392,7 @@ let
 
 
     def media_finished(inp):
-        data = jf_request("/Items?IncludeItemTypes=Series&IsPlayed=true&Recursive=true&Fields=Path&Limit=50")
+        data = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes=Series&IsPlayed=true&Recursive=true&Fields=Path&Limit=50")
         if "error" in data:
             return data["error"]
 
@@ -439,8 +440,8 @@ let
         episode_count = movies.get("EpisodeCount", 0)
 
         # Get unwatched counts
-        unwatched_movies = jf_request("/Items?IncludeItemTypes=Movie&IsPlayed=false&Recursive=true&Limit=0")
-        unwatched_series = jf_request("/Items?IncludeItemTypes=Series&IsPlayed=false&Recursive=true&Limit=0")
+        unwatched_movies = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes=Movie&IsPlayed=false&Recursive=true&Limit=0")
+        unwatched_series = jf_request(f"/Items?UserId={USER_ID}&IncludeItemTypes=Series&IsPlayed=false&Recursive=true&Limit=0")
 
         um = unwatched_movies.get("TotalRecordCount", "?") if not isinstance(unwatched_movies, str) else "?"
         us = unwatched_series.get("TotalRecordCount", "?") if not isinstance(unwatched_series, str) else "?"

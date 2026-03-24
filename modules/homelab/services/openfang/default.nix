@@ -59,6 +59,10 @@ in
         type = lib.types.path;
         description = "Path to file containing the Jellyfin API key";
       };
+      userId = lib.mkOption {
+        type = lib.types.str;
+        description = "Jellyfin user ID for API queries";
+      };
       port = lib.mkOption {
         type = lib.types.int;
         default = 8096;
