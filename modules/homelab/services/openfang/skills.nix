@@ -690,6 +690,104 @@ let
     cp ${paperlessSkillPy} $out/src/main.py
   '';
 
+  # --- Shell wrapper scripts for shell_exec (avoids pipe/metachar issues) ---
+
+  # Paperless CLI wrapper
+  paperlessToolScript = pkgs.writeShellScript "paperless-tool" ''
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    SKILL_PY="${skillsDir}/homelab-paperless/src/main.py"
+    CMD="$1"
+    ARG="$2"
+    case "$CMD" in
+      search)
+        echo "{\"tool\":\"paperless_search\",\"input\":{\"query\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        ;;
+      recent)
+        echo "{\"tool\":\"paperless_recent\",\"input\":{\"limit\":''${ARG:-5}}}" | python3 "$SKILL_PY"
+        ;;
+      tags)
+        echo "{\"tool\":\"paperless_tags\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      info)
+        echo "{\"tool\":\"paperless_info\",\"input\":{\"id\":$ARG}}" | python3 "$SKILL_PY"
+        ;;
+      *)
+        echo "Commands: search QUERY, recent [N], tags, info ID"
+        ;;
+    esac
+  '';
+
+  # Server CLI wrapper
+  serverToolScript = pkgs.writeShellScript "server-tool" ''
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    SKILL_PY="${skillsDir}/homelab-server/src/main.py"
+    CMD="$1"
+    ARG="$2"
+    case "$CMD" in
+      errors)
+        echo "{\"tool\":\"server_errors\",\"input\":{\"timeframe\":\"''${ARG:-1h}\"}}" | python3 "$SKILL_PY"
+        ;;
+      service)
+        echo "{\"tool\":\"server_service_logs\",\"input\":{\"service\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        ;;
+      failed)
+        echo "{\"tool\":\"server_failed_units\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      storage)
+        echo "{\"tool\":\"server_storage\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      zpool)
+        echo "{\"tool\":\"server_zpool_status\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      snapraid)
+        echo "{\"tool\":\"server_snapraid_status\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      snapraid-diff)
+        echo "{\"tool\":\"server_snapraid_diff\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      auth)
+        echo "{\"tool\":\"server_auth_events\",\"input\":{\"timeframe\":\"''${ARG:-1h}\"}}" | python3 "$SKILL_PY"
+        ;;
+      backup)
+        echo "{\"tool\":\"server_backup_status\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      tunnel)
+        echo "{\"tool\":\"server_tunnel_status\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      *)
+        echo "Commands: errors [1h|6h|24h], service NAME, failed, storage, zpool, snapraid, snapraid-diff, auth [1h|6h|24h], backup, tunnel"
+        ;;
+    esac
+  '';
+
+  # Media CLI wrapper
+  mediaToolScript = pkgs.writeShellScript "media-tool" ''
+    export PATH=${pkgs.coreutils}/bin:${pkgs.python3}/bin:$PATH
+    SKILL_PY="${skillsDir}/homelab-media/src/main.py"
+    CMD="$1"
+    ARG="$2"
+    case "$CMD" in
+      unwatched)
+        echo "{\"tool\":\"media_unwatched\",\"input\":{\"type\":\"''${ARG:-movies}\"}}" | python3 "$SKILL_PY"
+        ;;
+      suggest)
+        echo "{\"tool\":\"media_suggest\",\"input\":{\"type\":\"''${ARG:-movies}\"}}" | python3 "$SKILL_PY"
+        ;;
+      finished)
+        echo "{\"tool\":\"media_finished\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      cleanup)
+        echo "{\"tool\":\"media_cleanup\",\"input\":{\"item_id\":\"$ARG\"}}" | python3 "$SKILL_PY"
+        ;;
+      stats)
+        echo "{\"tool\":\"media_stats\",\"input\":{}}" | python3 "$SKILL_PY"
+        ;;
+      *)
+        echo "Commands: unwatched [movies|shows], suggest [movies|shows], finished, cleanup ITEM_ID, stats"
+        ;;
+    esac
+  '';
+
   # All skills to install
   skills = [
     { name = "ping-test"; path = pingTestSkill; }
@@ -720,6 +818,13 @@ in
   config = lib.mkIf cfg.enable {
     # python3 must be in system PATH for OpenFang to run Python skills
     environment.systemPackages = [ pkgs.python3 ];
+
+    # Shell wrapper scripts for shell_exec access
+    systemd.tmpfiles.rules = [
+      "L+ /persist/openfang/scripts/server-tool.sh - - - - ${serverToolScript}"
+      "L+ /persist/openfang/scripts/media-tool.sh - - - - ${mediaToolScript}"
+      "L+ /persist/openfang/scripts/paperless-tool.sh - - - - ${paperlessToolScript}"
+    ];
 
     # Install/update skills on every rebuild
     systemd.services.openfang-install-skills = {
