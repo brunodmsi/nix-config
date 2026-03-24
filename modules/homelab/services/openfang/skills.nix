@@ -40,7 +40,7 @@ let
   pingTestSkill = pkgs.runCommand "ping-test-skill" {} ''
     mkdir -p $out/src
     cp ${pingTestToml} $out/skill.toml
-    cp ${pingTestPy} $out/src/main.py
+    sed 's/^    //' ${pingTestPy} > $out/src/main.py
   '';
 
   # --- homelab-server skill (Phase 1) ---
@@ -238,7 +238,7 @@ let
   serverSkill = pkgs.runCommand "homelab-server-skill" {} ''
     mkdir -p $out/src
     cp ${serverSkillToml} $out/skill.toml
-    cp ${serverSkillPy} $out/src/main.py
+    sed 's/^    //' ${serverSkillPy} > $out/src/main.py
   '';
 
   # --- homelab-media skill (Phase 3) ---
@@ -481,7 +481,7 @@ let
   mediaSkill = pkgs.runCommand "homelab-media-skill" {} ''
     mkdir -p $out/src
     cp ${mediaSkillToml} $out/skill.toml
-    cp ${mediaSkillPy} $out/src/main.py
+    sed 's/^    //' ${mediaSkillPy} > $out/src/main.py
   '';
 
   # --- homelab-paperless skill (Phase 4) ---
@@ -687,7 +687,7 @@ let
   paperlessSkill = pkgs.runCommand "homelab-paperless-skill" {} ''
     mkdir -p $out/src
     cp ${paperlessSkillToml} $out/skill.toml
-    cp ${paperlessSkillPy} $out/src/main.py
+    sed 's/^    //' ${paperlessSkillPy} > $out/src/main.py
   '';
 
   # --- homelab-nextcloud skill (Phase 5) ---
@@ -1059,7 +1059,7 @@ END:VCALENDAR"""
   nextcloudSkill = pkgs.runCommand "homelab-nextcloud-skill" {} ''
     mkdir -p $out/src
     cp ${nextcloudSkillToml} $out/skill.toml
-    cp ${nextcloudSkillPy} $out/src/main.py
+    sed 's/^    //' ${nextcloudSkillPy} > $out/src/main.py
   '';
 
   # --- Shell wrapper scripts for shell_exec (avoids pipe/metachar issues) ---
