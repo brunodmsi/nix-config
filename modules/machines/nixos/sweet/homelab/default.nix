@@ -162,7 +162,7 @@
           Delete request:
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
-        skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" "homelab-nextcloud" ];
+        skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" "homelab-nextcloud" "sysadmin" ];
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
