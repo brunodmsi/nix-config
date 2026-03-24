@@ -278,18 +278,8 @@ let
     input_schema = { type = "object", properties = { item_id = { type = "string", description = "Jellyfin item ID to delete" } }, required = ["item_id"] }
 
     [[tools.provided]]
-    name = "media_sessions"
-    description = "Show active streaming sessions — who is watching what right now."
-    input_schema = { type = "object", properties = {} }
-
-    [[tools.provided]]
     name = "media_stats"
     description = "Library overview — total, watched, unwatched counts for movies and shows."
-    input_schema = { type = "object", properties = {} }
-
-    [[tools.provided]]
-    name = "media_transcode_activity"
-    description = "Active transcoding sessions — codec, bitrate, resolution, client info."
     input_schema = { type = "object", properties = {} }
   '';
 
@@ -439,43 +429,6 @@ let
         return f"Deleted: {name}"
 
 
-    def media_sessions(inp):
-        data = jf_request("/Sessions")
-        if "error" in data:
-            return data["error"]
-
-        active = [s for s in data if s.get("NowPlayingItem")]
-        if not active:
-            return "No active streaming sessions."
-
-        lines = ["Active sessions:"]
-        for s in active:
-            user = s.get("UserName", "Unknown")
-            item = s.get("NowPlayingItem", {})
-            title = item.get("Name", "Unknown")
-            series = item.get("SeriesName")
-            if series:
-                title = f"{series} - {title}"
-            client = s.get("Client", "Unknown")
-            device = s.get("DeviceName", "")
-
-            play_state = s.get("PlayState", {})
-            position = play_state.get("PositionTicks", 0)
-            duration = item.get("RunTimeTicks", 0)
-            progress = ""
-            if duration > 0:
-                pct = (position / duration) * 100
-                progress = f" ({pct:.0f}%)"
-
-            transcode = s.get("TranscodingInfo")
-            tc_info = ""
-            if transcode:
-                tc_info = f" [transcoding → {transcode.get('VideoCodec', '?')}]"
-
-            lines.append(f"- {user} on {client}/{device}: {title}{progress}{tc_info}")
-        return "\n".join(lines)
-
-
     def media_stats(inp):
         movies = jf_request("/Items/Counts")
         if "error" in movies:
@@ -495,43 +448,12 @@ let
         return f"Library stats:\nMovies: {movie_count} total ({um} unwatched)\nShows: {series_count} total ({us} unwatched)\nEpisodes: {episode_count}"
 
 
-    def media_transcode_activity(inp):
-        data = jf_request("/Sessions")
-        if "error" in data:
-            return data["error"]
-
-        transcoding = [s for s in data if s.get("TranscodingInfo")]
-        if not transcoding:
-            return "No active transcoding sessions."
-
-        lines = ["Active transcodes:"]
-        for s in transcoding:
-            user = s.get("UserName", "Unknown")
-            item = s.get("NowPlayingItem", {})
-            title = item.get("Name", "Unknown")
-            tc = s.get("TranscodingInfo", {})
-            video_codec = tc.get("VideoCodec", "?")
-            audio_codec = tc.get("AudioCodec", "?")
-            bitrate = tc.get("Bitrate", 0)
-            br_mbps = f"{bitrate / 1_000_000:.1f} Mbps" if bitrate else "?"
-            hw = "HW" if tc.get("IsVideoDirect") is False and tc.get("VideoDecoderIsHardware") else "SW"
-            reason = tc.get("TranscodeReasons", [])
-
-            lines.append(f"- {user}: {title}")
-            lines.append(f"  Video: {video_codec} ({hw}) | Audio: {audio_codec} | {br_mbps}")
-            if reason:
-                lines.append(f"  Reason: {', '.join(reason)}")
-        return "\n".join(lines)
-
-
     TOOLS = {
         "media_unwatched": media_unwatched,
         "media_suggest": media_suggest,
         "media_finished": media_finished,
         "media_cleanup": media_cleanup,
-        "media_sessions": media_sessions,
         "media_stats": media_stats,
-        "media_transcode_activity": media_transcode_activity,
     }
 
 

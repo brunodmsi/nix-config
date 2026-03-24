@@ -127,7 +127,6 @@
           You have Jellyfin media tools. Use them when asked about:
           - What to watch → media_unwatched, media_suggest
           - Finished shows / cleanup → media_finished, media_cleanup
-          - Who's streaming → media_sessions, media_transcode_activity
           - Library stats → media_stats
           IMPORTANT: ALWAYS confirm with the user before using media_cleanup to delete anything.
 
