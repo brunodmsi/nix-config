@@ -961,7 +961,7 @@ let
           </c:filter>
         </c:calendar-query>"""
 
-        result = nc_report(f"/remote.php/dav/calendars/{USER}/tasks/", body)
+        result = nc_report(f"/remote.php/dav/calendars/{USER}/personal/", body)
         if "error" in result.lower()[:50] or "HTTP" in result[:10]:
             return f"Tasks query failed: {result[:200]}"
 
@@ -1013,7 +1013,7 @@ END:VCALENDAR"""
         auth = get_auth_header()
         if not auth:
             return "Cannot read Nextcloud credentials"
-        url = f"{BASE_URL}/remote.php/dav/calendars/{USER}/tasks/{uid}.ics"
+        url = f"{BASE_URL}/remote.php/dav/calendars/{USER}/personal/{uid}.ics"
         req = urllib.request.Request(url, data=vtodo.encode(), method="PUT")
         req.add_header("Authorization", auth)
         req.add_header("Content-Type", "text/calendar; charset=utf-8")
