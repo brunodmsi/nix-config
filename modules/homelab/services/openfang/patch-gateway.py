@@ -124,20 +124,20 @@ if "payloadObj" not in src:
                 # Replace from i to end (inclusive)
                 indent = '    '
                 new_lines = [
-                    f'{indent}// PATCHED_V8: multimodal payload with image support',
-                    f'{indent}const imgB64 = (metadata || {}).__image_b64;',
-                    f'{indent}if (imgB64) delete metadata.__image_b64;',
-                    f'{indent}const payloadObj = {{',
-                    f'{indent}  message: text,',
-                    f'{indent}  metadata: metadata || {{',
-                    f'{indent}    channel: \'whatsapp\',',
-                    f'{indent}    sender: phone,',
-                    f'{indent}    sender_name: pushName,',
-                    f'{indent}    remote_jid: remoteJid,',
-                    f'{indent}  }},',
-                    f'{indent}}};',
-                    f'{indent}if (imgB64) payloadObj.images = [imgB64];',
-                    f'{indent}const payload = JSON.stringify(payloadObj);',
+                    indent + '// PATCHED_V8: multimodal payload with image support',
+                    indent + 'const imgB64 = (metadata || {}).__image_b64;',
+                    indent + 'if (imgB64) delete metadata.__image_b64;',
+                    indent + 'const payloadObj = {',
+                    indent + '  message: text,',
+                    indent + '  metadata: metadata || {',
+                    indent + "    channel: 'whatsapp',",
+                    indent + '    sender: phone,',
+                    indent + '    sender_name: pushName,',
+                    indent + '    remote_jid: remoteJid,',
+                    indent + '  },',
+                    indent + '};',
+                    indent + 'if (imgB64) payloadObj.images = [imgB64];',
+                    indent + 'const payload = JSON.stringify(payloadObj);',
                 ]
                 lines[i:end + 1] = new_lines
                 src = '\n'.join(lines)
