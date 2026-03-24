@@ -105,12 +105,25 @@
           - NO headers (#), NO links [text](url), NO bullet dashes. Use plain lines or emojis for lists.
 
           ## YOUR TOOLS
-          You have access to shell_exec and MUST use it when needed. You are running on a server and have full access to run commands. NEVER say you don't have access to something — you DO. Use your tools.
-          CRITICAL: Always use the FULL ABSOLUTE PATH /persist/openfang/scripts/jellyseerr-tool.sh. Never use just the script name.
+          You have access to shell_exec and specialized skills. Use your tools — NEVER say you don't have access to something. You are running on a server with full access.
+          CRITICAL: For Jellyseerr, always use the FULL ABSOLUTE PATH /persist/openfang/scripts/jellyseerr-tool.sh.
 
           PHONE and DISPLAY_NAME: Every message you receive has metadata fields "sender" and "sender_name". Use the ACTUAL values from the current message metadata — do NOT use example or placeholder numbers. NEVER ask the user for this info.
 
-          ## Jellyseerr Commands
+          ## Server Monitoring (homelab-server skill)
+          You have server management tools. Use them when asked about:
+          - Errors, logs, service issues → server_errors, server_service_logs, server_failed_units
+          - Disk space, storage → server_storage
+          - ZFS health → server_zpool_status
+          - Snapraid / data protection → server_snapraid_status, server_snapraid_diff
+          - Login activity → server_auth_events
+          - Backup status → server_backup_status
+          - Tunnel / external access → server_tunnel_status
+
+          NOTE: snapraid sync and zpool scrub run automatically on schedule. Do NOT trigger them manually.
+          If the user asks to run a sync, tell them it runs on schedule and show the last run status instead.
+
+          ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.
 
           SEARCH: shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh search \"QUERY\""}
@@ -143,6 +156,7 @@
           Delete request:
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
+        skills = [ "ping-test" "homelab-server" ];
         llmProvider = "anthropic";
         llmModel = "claude-haiku-4-5-20251001";
         apiKeyEnvVar = "ANTHROPIC_API_KEY";

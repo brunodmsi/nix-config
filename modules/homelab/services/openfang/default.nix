@@ -10,7 +10,7 @@ let
   patchScript = ./patch-gateway.py;
 in
 {
-  imports = [ ./database.nix ./jellyseerr-bridge.nix ./message-router.nix ];
+  imports = [ ./database.nix ./jellyseerr-bridge.nix ./message-router.nix ./wa-notify.nix ./skills.nix ];
 
   options.homelab.services.openfang = {
     enable = lib.mkEnableOption "OpenFang AI Agent";
@@ -97,6 +97,11 @@ in
       type = lib.types.str;
       default = "agent.${homelab.baseDomain}";
     };
+    skills = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "OpenFang skills to enable for the agent";
+    };
     homepage.name = lib.mkOption {
       type = lib.types.str;
       default = "OpenFang";
@@ -156,6 +161,7 @@ in
         description = "${cfg.agentName} WhatsApp assistant"
         author = "bmasi"
         module = "builtin:chat"
+        ${lib.optionalString (cfg.skills != []) ''skills = [${lib.concatMapStringsSep ", " (s: ''"${s}"'') cfg.skills}]''}
 
         [model]
         provider = "${cfg.llmProvider}"
@@ -212,7 +218,7 @@ in
       wants = [ "network-online.target" ];
       requires = [ "openfang-install.service" ];
       wantedBy = [ "multi-user.target" ];
-      path = with pkgs; [ bash coreutils gnugrep gnused findutils curl jq postgresql ];
+      path = with pkgs; [ bash coreutils gnugrep gnused findutils curl jq postgresql python3 ];
       environment = {
         HOME = cfg.configDir;
         OPENFANG_CONFIG = "/etc/openfang/config.toml";
