@@ -72,17 +72,26 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.services.authelia-main = lib.mkIf cfg.oidc.enable {
-      serviceConfig.ExecStartPre = lib.mkBefore [
-        "+${pkgs.writeShellScript "authelia-oidc-env" (
-          lib.concatImapStringsSep "\n" (i: c:
+    # Write OIDC env file before Authelia starts
+    systemd.services.authelia-main-oidc-env = lib.mkIf cfg.oidc.enable {
+      description = "Generate Authelia OIDC environment file";
+      before = [ "authelia-main.service" ];
+      requiredBy = [ "authelia-main.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "authelia-oidc-env" ''
+          mkdir -p /run/authelia-main
+          rm -f /run/authelia-main/oidc.env
+          ${lib.concatImapStringsSep "\n" (i: c:
             "echo \"AUTHELIA_IDENTITY_PROVIDERS_OIDC_CLIENTS_${toString (i - 1)}_CLIENT_SECRET=$(cat ${c.client_secret_hash_file})\" >> /run/authelia-main/oidc.env"
-          ) cfg.oidc.clients
-          + "\n"
-        )}"
-      ];
-      serviceConfig.EnvironmentFile = [ "/run/authelia-main/oidc.env" ];
+          ) cfg.oidc.clients}
+          chmod 600 /run/authelia-main/oidc.env
+        '';
+      };
     };
+    systemd.services.authelia-main.serviceConfig.EnvironmentFile =
+      lib.mkIf cfg.oidc.enable [ "/run/authelia-main/oidc.env" ];
 
     services.authelia.instances.main = {
       enable = true;
