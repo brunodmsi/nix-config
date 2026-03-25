@@ -20,10 +20,12 @@ let
   venvDir = "${dataDir}/venv";
 
   # Wrapper script that runs car-search.py with the venv python
+  # Use NixOS chromium instead of Playwright's downloaded one (missing system libs)
   carSearchWrapper = pkgs.writeShellScript "car-search" ''
     export PATH=${pkgs.coreutils}/bin:$PATH
     export PLAYWRIGHT_BROWSERS_PATH=${venvDir}/ms-playwright
     export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib
+    export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
     exec ${venvDir}/bin/python3 ${dataDir}/car-search.py "$@"
   '';
 

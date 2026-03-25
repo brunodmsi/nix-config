@@ -172,8 +172,11 @@ def main():
     results = []
 
     with sync_playwright() as p:
+        # Use NixOS system chromium if available (avoids missing shared libs)
+        chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
         browser = p.chromium.launch(
             headless=True,
+            executable_path=chromium_path,
             args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
         )
         context = browser.new_context(
