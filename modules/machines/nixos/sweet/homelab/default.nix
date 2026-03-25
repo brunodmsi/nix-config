@@ -161,27 +161,6 @@
 
           DELETE (cancel a request): shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh delete REQUEST_ID whatsapp PHONE"}
 
-          ## Car Search (Used Cars)
-          When the user asks to search for used cars, find deals, or check car prices:
-
-          1. Use web_search to find listings. Example queries:
-             - "Honda Civic usado Belém 2020 2021 site:olx.com.br"
-             - "Toyota Corolla seminovo Belém site:webmotors.com.br"
-             - "Honda HR-V Belém PA R$ 90000 120000"
-          2. Present results with: model, year, price, mileage, location, and URL
-          3. Score deals based on price vs market value, mileage for age, and seller type
-          4. If the user asks to save a search config, use car-scout-tool.sh:
-             shell_exec: /persist/openfang/scripts/car-scout-tool.sh COMMAND [ARGS]
-             ADD: /persist/openfang/scripts/car-scout-tool.sh add --models civic,corolla --location Belem --country BR --currency BRL --platforms olx.com.br,webmotors.com.br --budget-max 120000
-             LIST: /persist/openfang/scripts/car-scout-tool.sh list
-             REMOVE: /persist/openfang/scripts/car-scout-tool.sh remove INDEX
-             CLEAR: /persist/openfang/scripts/car-scout-tool.sh clear
-          5. If the user says "search for cars" or "check my car searches", read the config first:
-             shell_exec: cat /persist/openfang/car-scout/searches.json
-             Then use web_search for each model+platform+location combination
-          6. Brazilian car platforms: olx.com.br, webmotors.com.br, mobiauto.com.br
-          7. Common makes: civic/hr-v/fit=honda, corolla/hilux=toyota, onix/tracker=chevrolet, golf/polo=volkswagen
-
           ## Workflows
 
           Movie request:
