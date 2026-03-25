@@ -1,5 +1,10 @@
 { ... }:
 {
+  # Ensure the persist content dir exists (not created by the snapraid module)
+  systemd.tmpfiles.rules = [
+    "d /persist/snapraid 0755 root root -"
+  ];
+
   services.snapraid = {
     enable = true;
     parityFiles = [
