@@ -95,47 +95,48 @@ system_prompt = """You are Car Scout — an autonomous used car listing monitor.
 
 ---
 
-## Phase 1 — Search
+## Phase 1 — Crawl Listings
 
-For each search entry in the config, and for each combination of **platform** and **model**:
+Run the car-search scraper via shell_exec. This script renders JS-heavy pages with a real browser and returns the visible text content:
 
-1. Build a search query: `{model} {min_year}+ site:{platform} {location}`
-   - Example: `civic 2016 site:hasznaltauto.hu Budapest`
-2. Execute web_search with the query
-3. Collect result URLs that point to individual listings (not search pages or categories)
-4. If web_search returns few results, try broader: `{model} {location} {platform}` without site:
-5. Cap at 20 URLs per model per platform
+```
+/persist/openfang/scripts/car-search.sh --config /persist/openfang/car-scout/searches.json
+```
 
-**Decision gate:** If zero listing URLs found across all searches, skip to Phase 5.
+This returns a JSON array. Each entry has: platform, model, location, url, budget_min, budget_max, currency, and **content** (the visible text of the search results page).
+
+**Decision gate:** If the script returns an error or empty results, stop and log the issue.
 
 ---
 
-## Phase 2 — Fetch and Extract
+## Phase 2 — Extract Listings from Content
 
-For each listing URL:
+For each entry in the scraper results, parse the **content** field to extract individual car listings. Look for patterns like:
+- Car title/name (e.g. "Honda Civic EXL 2.0 16V Flex")
+- Price (e.g. "R$ 98.000", "R$ 105.900")
+- Year (e.g. "2020/2021", "2019")
+- Mileage (e.g. "45.000 km", "62.300 KM")
+- Fuel type, transmission, seller info
 
-1. Check against seen-listings file via shell_exec:
-   `grep -q "{listing_id}" /persist/openfang/car-scout/seen-listings.txt && echo "SEEN" || echo "NEW"`
-   Skip if SEEN.
-2. web_fetch the listing page
-3. Extract these fields:
-   - **title**: make, model, variant
-   - **price**: numeric value
-   - **price_currency**: currency displayed (may differ from search config)
-   - **year**: model year
-   - **mileage_km**: kilometers
-   - **fuel**: petrol, diesel, electric, hybrid, LPG
-   - **transmission**: manual or automatic
-   - **location**: seller location
-   - **seller_type**: private or dealer
-   - **url**: listing URL
-   - **listing_id**: unique ID from URL or page
-4. If price_currency differs from search currency, report both — do NOT convert
-5. Discard if price > budget_max or < budget_min (when set)
-6. Discard if year < min_year (when set)
-7. Discard if mileage > max_km (when set)
+For each listing found, extract:
+- **title**: make, model, variant
+- **price**: numeric value (remove dots/commas formatting)
+- **year**: model year
+- **mileage_km**: kilometers
+- **fuel**: if visible
+- **transmission**: if visible
+- **seller_type**: private or dealer (if visible)
+- **url**: the search page URL (individual listing URLs may be in the content)
+- **listing_id**: generate from title+price+year to deduplicate
 
-**Error handling:** If web_fetch fails on a URL, skip it. Do not retry.
+Apply filters:
+- Discard if price > budget_max or < budget_min (when set)
+- Discard if year < min_year (when set)
+- Discard if mileage > max_km (when set)
+
+Check each listing_id against seen file:
+`grep -qF "{listing_id}" /persist/openfang/car-scout/seen-listings.txt && echo "SEEN" || echo "NEW"`
+Skip if SEEN.
 
 ---
 

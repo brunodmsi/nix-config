@@ -16,6 +16,15 @@ let
   gatewayUrl = "http://127.0.0.1:${toString cfg.whatsappGatewayPort}";
 
   handDir = ./hands/car-scout;
+  carSearchScript = ./hands/car-scout/car-search.py;
+  venvDir = "${dataDir}/venv";
+
+  # Wrapper script that runs car-search.py with the venv python
+  carSearchWrapper = pkgs.writeShellScript "car-search" ''
+    export PATH=${pkgs.coreutils}/bin:$PATH
+    export PLAYWRIGHT_BROWSERS_PATH=${venvDir}/ms-playwright
+    exec ${venvDir}/bin/python3 ${dataDir}/car-search.py "$@"
+  '';
 
   # --- car-scout-tool.sh: config management for Fluzy ---
   carScoutToolScript = pkgs.writeShellScript "car-scout-tool" ''
@@ -220,7 +229,41 @@ in
       "f ${configFile} 0640 root root - []"
       "f ${seenFile} 0640 root root -"
       "L+ /persist/openfang/scripts/car-scout-tool.sh - - - - ${carScoutToolScript}"
+      "L+ /persist/openfang/scripts/car-search.sh - - - - ${carSearchWrapper}"
+      "C+ ${dataDir}/car-search.py 0755 root root - ${carSearchScript}"
     ];
+
+    # Install Playwright Python venv for car-search.py
+    systemd.services.openfang-car-scout-venv = {
+      description = "Install Car Scout Python venv (Playwright)";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
+      path = with pkgs; [ python3 coreutils bash ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "setup-car-scout-venv" ''
+          export PATH=${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:$PATH
+
+          if [ ! -f ${venvDir}/bin/python3 ]; then
+            echo "[car-scout] Creating Python venv..."
+            ${pkgs.python3}/bin/python3 -m venv ${venvDir}
+          fi
+
+          # Install/upgrade deps
+          ${venvDir}/bin/pip install --quiet --upgrade playwright playwright-stealth 2>&1
+
+          # Install chromium browser if not present
+          if [ ! -d ${venvDir}/ms-playwright ]; then
+            echo "[car-scout] Installing Chromium..."
+            PLAYWRIGHT_BROWSERS_PATH=${venvDir}/ms-playwright ${venvDir}/bin/playwright install chromium 2>&1
+          fi
+
+          echo "[car-scout] Venv ready"
+        '';
+      };
+    };
 
     # Install Hand after every openfang (re)start — registrations are in-memory
     systemd.services.openfang-install-car-scout = {
