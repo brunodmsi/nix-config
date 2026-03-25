@@ -165,10 +165,11 @@ in
     # Node.js >= 18 required for WhatsApp Web gateway
     environment.systemPackages = [ pkgs.nodejs_22 ];
 
-    # Ensure directories exist
+    # Ensure directories exist + symlink binary to PATH
     systemd.tmpfiles.rules = [
       "d ${cfg.configDir} 0750 root root - -"
       "d ${cfg.dataDir} 0750 root root - -"
+      "L+ /usr/local/bin/openfang - - - - ${cfg.configDir}/.openfang/bin/openfang"
     ];
 
     # Install OpenFang binary
