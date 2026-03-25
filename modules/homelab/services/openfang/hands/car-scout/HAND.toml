@@ -112,7 +112,12 @@ Build page 1 and page 2 URLs for each platform + model. Then call the browser re
 
 Pass ALL URLs in a single call. The script launches one browser and visits each URL, returning a JSON array of `{url, content}` where content is the rendered visible text.
 
-IMPORTANT: Do NOT use pipes or shell metacharacters. Just list the URLs as arguments separated by spaces.
+CRITICAL RULES for shell_exec:
+- The ENTIRE command must be on ONE LINE. No newlines, no line breaks.
+- No pipes (|), no $(), no backticks, no semicolons, no &&.
+- Just the script path followed by URLs separated by spaces, all on one single line.
+- Example: /persist/openfang/scripts/car-search.sh https://url1.com https://url2.com https://url3.com
+- If you have many URLs, it's fine to have a very long single line.
 
 **Decision gate:** If the script returns an error or empty results, stop and log the issue.
 
