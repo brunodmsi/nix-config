@@ -159,6 +159,7 @@ in
       type = lib.types.str;
       default = "Services";
     };
+    playwright.enable = lib.mkEnableOption "Shared Playwright Python venv for browser automation";
   };
 
   config = lib.mkIf cfg.enable {
@@ -175,7 +176,41 @@ in
     systemd.tmpfiles.rules = [
       "d ${cfg.configDir} 0750 root root - -"
       "d ${cfg.dataDir} 0750 root root - -"
+    ] ++ lib.optionals cfg.playwright.enable [
+      "d ${cfg.configDir}/playwright-venv 0750 root root - -"
+      # Shared wrapper: any script can use /persist/openfang/scripts/playwright-run.sh myscript.py args
+      "L+ /persist/openfang/scripts/playwright-run.sh - - - - ${pkgs.writeShellScript "playwright-run" ''
+        export PATH=${pkgs.coreutils}/bin:$PATH
+        export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib
+        export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
+        exec ${cfg.configDir}/playwright-venv/bin/python3 "$@"
+      ''}"
     ];
+
+    # Shared Playwright Python venv — used by any hand/skill that needs browser automation
+    systemd.services.openfang-playwright-venv = lib.mkIf cfg.playwright.enable {
+      description = "Install shared Playwright Python venv";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
+      path = with pkgs; [ python3 coreutils bash ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "setup-playwright-venv" ''
+          export PATH=${pkgs.python3}/bin:${pkgs.coreutils}/bin:${pkgs.bash}/bin:$PATH
+          VENV=${cfg.configDir}/playwright-venv
+
+          if [ ! -f $VENV/bin/python3 ]; then
+            echo "[playwright] Creating shared Python venv..."
+            ${pkgs.python3}/bin/python3 -m venv $VENV
+          fi
+
+          $VENV/bin/pip install --quiet --upgrade playwright playwright-stealth 2>&1
+          echo "[playwright] Shared venv ready (using NixOS system chromium)"
+        '';
+      };
+    };
 
     # Install OpenFang binary
     systemd.services.openfang-install = {

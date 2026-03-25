@@ -220,6 +220,7 @@
           enable = true;
           apiKeyFile = config.age.secrets.nextcloudAppPassword.path;
         };
+        playwright.enable = true;
         carScout = {
           enable = true;
           apiKeyFile = config.age.secrets.geminiApiKey.path;
