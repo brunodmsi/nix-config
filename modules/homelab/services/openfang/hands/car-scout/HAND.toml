@@ -95,15 +95,24 @@ system_prompt = """You are Car Scout — an autonomous used car listing monitor.
 
 ---
 
-## Phase 1 — Crawl Listings
+## Phase 1 — Build URLs and Crawl
 
-Run the car-search scraper via shell_exec. This script renders JS-heavy pages with a real browser and returns the visible text content:
+For each search entry, build the search result page URLs for each platform + model combination.
+You know how car listing sites structure their URLs. Common patterns:
+- WebMotors: `https://www.webmotors.com.br/carros-usados/{state}-{city}/{make}/{model}` — pagination: `?page=2`
+- OLX: `https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/{make}/{model}/estado-{state}/regiao-de-{city}` — pagination: `?o=2`
+- Mobiauto: `https://www.mobiauto.com.br/comprar/carros-usados/{state}-{city}/{make}/{model}` — pagination: `/pagina-2`
+- For any other platform, use web_search to find the correct URL pattern first.
+
+Build page 1 and page 2 URLs for each platform + model. Then call the browser renderer:
 
 ```
-/persist/openfang/scripts/car-search.sh --config /persist/openfang/car-scout/searches.json
+/persist/openfang/scripts/car-search.sh URL1 URL2 URL3 ...
 ```
 
-This returns a JSON array. Each entry has: platform, model, location, url, budget_min, budget_max, currency, and **content** (the visible text of the search results page).
+Pass ALL URLs in a single call. The script launches one browser and visits each URL, returning a JSON array of `{url, content}` where content is the rendered visible text.
+
+IMPORTANT: Do NOT use pipes or shell metacharacters. Just list the URLs as arguments separated by spaces.
 
 **Decision gate:** If the script returns an error or empty results, stop and log the issue.
 
