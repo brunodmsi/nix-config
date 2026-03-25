@@ -166,8 +166,7 @@ let
           echo "Error: provide phone number (e.g. +5511999999999)"
           exit 1
         fi
-        export HOME=${cfg.configDir}
-        $OPENFANG_BIN hand config car-scout --config "$OPENFANG_CONFIG" --set notify_phone="$PHONE" 2>&1
+        echo "$PHONE" > "${dataDir}/notify-phone.txt"
         echo "Notification phone set to $PHONE"
         ;;
 
@@ -234,7 +233,7 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "install-car-scout" ''
-          export PATH=${pkgs.coreutils}/bin:$PATH
+          export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:$PATH
           export HOME=${cfg.configDir}
           export GEMINI_API_KEY=$(cat ${csCfg.apiKeyFile})
 
@@ -242,17 +241,17 @@ in
           mkdir -p "$HAND_INSTALL_DIR"
 
           cp ${handDir}/HAND.toml "$HAND_INSTALL_DIR/"
-          cp ${handDir}/system-prompt.md "$HAND_INSTALL_DIR/"
           cp ${handDir}/SKILL.md "$HAND_INSTALL_DIR/"
+
+          # Wait for OpenFang daemon to be ready
+          for i in $(seq 1 30); do
+            ${pkgs.curl}/bin/curl -sf "http://127.0.0.1:${toString cfg.listenPort}/api/agents" >/dev/null 2>&1 && break
+            sleep 2
+          done
 
           ${openfangBin} hand install "$HAND_INSTALL_DIR" --config ${openfangConfig} 2>&1 || echo "[car-scout] Install failed or already installed"
 
-          # Set gateway URL (phone is set by user via Fluzy)
-          ${openfangBin} hand config car-scout --config ${openfangConfig} \
-            --set gateway_url="${gatewayUrl}" \
-            2>&1 || true
-
-          echo "[car-scout] Hand installed and configured"
+          echo "[car-scout] Hand installed"
         '';
       };
     };
