@@ -44,6 +44,13 @@ EXPECTED_BACKUPS = {
     "openfang-config": {"src": "/persist/openfang", "dst": f"{BACKUP_DIR}/persist/openfang"},
 }
 
+# Paths protected by snapraid parity (not rsync backed up, but still protected)
+SNAPRAID_PROTECTED = {
+    "immich-photos": "/mnt/data1/Media/Photos",
+    "nextcloud-data": "/mnt/data1/Nextcloud",
+    "documents": "/mnt/data1/Documents",
+}
+
 
 def run_cmd(cmd, timeout=30):
     try:
@@ -75,12 +82,20 @@ def format_size(bytes_val):
 def get_last_backup_time():
     """Get when backup-to-hdd last ran successfully."""
     result = run_cmd("systemctl show backup-to-hdd --property=ExecMainStartTimestamp --value")
+    if not result or result == "n/a":
+        return None
     try:
-        # Parse systemd timestamp format
-        dt = datetime.strptime(result.split(".")[0], "%a %Y-%m-%d %H:%M:%S")
+        # systemd format: "Tue 2026-03-25 00:20:15 CET" — strip timezone suffix
+        parts = result.rsplit(" ", 1)  # split off timezone
+        dt = datetime.strptime(parts[0], "%a %Y-%m-%d %H:%M:%S")
         return dt
     except:
-        return None
+        try:
+            # Fallback: try without day name
+            dt = datetime.strptime(result[:19], "%Y-%m-%d %H:%M:%S")
+            return dt
+        except:
+            return None
 
 
 def get_newest_file(path):
@@ -126,7 +141,7 @@ def analyze():
         # Check if source has newer files than backup
         src_newest = get_newest_file(src)
         dst_newest = get_newest_file(dst)
-        if src_newest and dst_newest and src_newest > dst_newest + timedelta(hours=2):
+        if src_newest and dst_newest and src_newest > dst_newest + timedelta(hours=26):
             stale.append(f"{name} (source updated {src_newest.strftime('%m-%d %H:%M')}, backup from {dst_newest.strftime('%m-%d %H:%M')})")
 
         # Get sizes
@@ -168,10 +183,23 @@ def analyze():
     else:
         report += "\n✅ All backups healthy\n"
 
-    report += f"\n*Storage:* {format_size(total_src)} source → {format_size(total_dst)} backed up\n"
+    report += f"\n*Rsync backup:* {format_size(total_src)} source → {format_size(total_dst)} backed up\n"
     report += "*Largest:*\n"
     for name, src_s, dst_s in top_5:
         report += f"  {name}: {format_size(src_s)}\n"
+
+    # Snapraid-protected data
+    snap_lines = []
+    snap_total = 0
+    for name, path in SNAPRAID_PROTECTED.items():
+        if os.path.exists(path):
+            size = get_dir_size(path)
+            if size > 0:
+                snap_lines.append(f"  {name}: {format_size(size)}")
+                snap_total += size
+    if snap_lines:
+        report += f"\n*Snapraid parity protected:* {format_size(snap_total)}\n"
+        report += "\n".join(snap_lines) + "\n"
 
     return report
 
