@@ -104,20 +104,25 @@ You know how car listing sites structure their URLs. Common patterns:
 - Mobiauto: `https://www.mobiauto.com.br/comprar/carros-usados/{state}-{city}/{make}/{model}` — pagination: `/pagina-2`
 - For any other platform, use web_search to find the correct URL pattern first.
 
-Build page 1 and page 2 URLs for each platform + model. Then call the browser renderer:
+For each platform, call the browser renderer with that platform's URLs (max 3 URLs per call to avoid timeouts):
 
 ```
-/persist/openfang/scripts/car-search.sh URL1 URL2 URL3 ...
+/persist/openfang/scripts/car-search.sh URL1 URL2 URL3
 ```
 
-Pass ALL URLs in a single call. The script launches one browser and visits each URL, returning a JSON array of `{url, content}` where content is the rendered visible text.
+The script returns a JSON array of `{url, content}` where content is the rendered visible text.
+
+Make SEPARATE calls per platform. Do NOT pass all URLs at once — the script has a 60s timeout per call.
+
+Example sequence:
+1. Call with 3 WebMotors URLs (civic, hrv, corolla page 1)
+2. Call with 3 OLX URLs
+3. Call with 3 Mobiauto URLs
 
 CRITICAL RULES for shell_exec:
 - The ENTIRE command must be on ONE LINE. No newlines, no line breaks.
-- No pipes (|), no $(), no backticks, no semicolons, no &&.
-- Just the script path followed by URLs separated by spaces, all on one single line.
+- No pipes, no $(), no backticks, no semicolons, no &&.
 - Example: /persist/openfang/scripts/car-search.sh https://url1.com https://url2.com https://url3.com
-- If you have many URLs, it's fine to have a very long single line.
 
 **Decision gate:** If the script returns an error or empty results, stop and log the issue.
 

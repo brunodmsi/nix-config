@@ -14,13 +14,14 @@ import os
 import time
 
 
-def crawl_page(page, url, timeout=30000):
+def crawl_page(page, url, timeout=15000):
     """Navigate to URL, wait for JS, return visible text."""
     try:
-        page.goto(url, wait_until="networkidle", timeout=timeout)
-        page.wait_for_timeout(2000)
+        page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        # Wait for dynamic content but don't wait forever
+        page.wait_for_timeout(3000)
         text = page.inner_text("body")
-        return text[:30000]
+        return text[:20000]
     except Exception as e:
         return f"ERROR: {e}"
 
