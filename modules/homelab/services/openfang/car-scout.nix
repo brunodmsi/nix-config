@@ -245,13 +245,13 @@ in
         ExecStart = pkgs.writeShellScript "install-car-scout" ''
           export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:$PATH
           export HOME=${cfg.configDir}
-          export GEMINI_API_KEY=$(cat ${csCfg.apiKeyFile})
 
           HAND_INSTALL_DIR="${cfg.configDir}/.openfang/hands/car-scout"
           mkdir -p "$HAND_INSTALL_DIR"
 
-          cp ${handDir}/HAND.toml "$HAND_INSTALL_DIR/"
-          cp ${handDir}/SKILL.md "$HAND_INSTALL_DIR/"
+          # Always overwrite with latest from Nix store
+          cp -f ${handDir}/HAND.toml "$HAND_INSTALL_DIR/"
+          cp -f ${handDir}/SKILL.md "$HAND_INSTALL_DIR/"
 
           # Wait for OpenFang daemon to be ready
           for i in $(seq 1 30); do
