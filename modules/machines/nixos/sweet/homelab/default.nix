@@ -156,29 +156,26 @@
 
           DELETE (cancel a request): shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh delete REQUEST_ID whatsapp PHONE"}
 
-          ## Car Scout (Used Car Monitor)
-          shell_exec: /persist/openfang/scripts/car-scout-tool.sh COMMAND [ARGS]
+          ## Car Search (Used Cars)
+          When the user asks to search for used cars, find deals, or check car prices:
 
-          ADD A SEARCH: /persist/openfang/scripts/car-scout-tool.sh add --models MODEL1,MODEL2 --location CITY --country CC --currency CUR --platforms site1.com,site2.com --budget-max N
-          Optional: --budget-min N --min-year N --max-km N
-          Example: /persist/openfang/scripts/car-scout-tool.sh add --models civic,corolla --location Budapest --country HU --currency HUF --platforms hasznaltauto.hu --budget-max 5000000 --min-year 2016
-
-          REMOVE A SEARCH: /persist/openfang/scripts/car-scout-tool.sh remove INDEX
-          LIST SEARCHES: /persist/openfang/scripts/car-scout-tool.sh list
-          CLEAR ALL: /persist/openfang/scripts/car-scout-tool.sh clear
-          SET PHONE: /persist/openfang/scripts/car-scout-tool.sh set-phone PHONE_WITH_COUNTRY_CODE
-          SEARCH NOW: /persist/openfang/scripts/car-scout-tool.sh trigger
-          PAUSE: /persist/openfang/scripts/car-scout-tool.sh pause
-          RESUME: /persist/openfang/scripts/car-scout-tool.sh resume
-          STATUS: /persist/openfang/scripts/car-scout-tool.sh status
-
-          Workflow:
-          1. User says "watch for Civic in Budapest under 5M HUF" -> extract params -> run add command
-          2. User says "show my car searches" -> run list
-          3. User says "search for cars now" -> run trigger
-          4. User says "stop car alerts" -> run pause
-          5. On first use, auto-set the phone with set-phone using the sender's phone from metadata
-          Supported currencies: BRL, EUR, USD, HUF, GBP, PLN, CZK, RON
+          1. Use web_search to find listings. Example queries:
+             - "Honda Civic usado Belém 2020 2021 site:olx.com.br"
+             - "Toyota Corolla seminovo Belém site:webmotors.com.br"
+             - "Honda HR-V Belém PA R$ 90000 120000"
+          2. Present results with: model, year, price, mileage, location, and URL
+          3. Score deals based on price vs market value, mileage for age, and seller type
+          4. If the user asks to save a search config, use car-scout-tool.sh:
+             shell_exec: /persist/openfang/scripts/car-scout-tool.sh COMMAND [ARGS]
+             ADD: /persist/openfang/scripts/car-scout-tool.sh add --models civic,corolla --location Belem --country BR --currency BRL --platforms olx.com.br,webmotors.com.br --budget-max 120000
+             LIST: /persist/openfang/scripts/car-scout-tool.sh list
+             REMOVE: /persist/openfang/scripts/car-scout-tool.sh remove INDEX
+             CLEAR: /persist/openfang/scripts/car-scout-tool.sh clear
+          5. If the user says "search for cars" or "check my car searches", read the config first:
+             shell_exec: cat /persist/openfang/car-scout/searches.json
+             Then use web_search for each model+platform+location combination
+          6. Brazilian car platforms: olx.com.br, webmotors.com.br, mobiauto.com.br
+          7. Common makes: civic/hr-v/fit=honda, corolla/hilux=toyota, onix/tracker=chevrolet, golf/polo=volkswagen
 
           ## Workflows
 
@@ -222,10 +219,7 @@
           apiKeyFile = config.age.secrets.nextcloudAppPassword.path;
         };
         playwright.enable = true;
-        carScout = {
-          enable = true;
-          apiKeyFile = config.age.secrets.geminiApiKey.path;
-        };
+        carScout.enable = false;
       };
       # Monitoring
       prometheus.enable = true;
