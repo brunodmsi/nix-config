@@ -37,11 +37,10 @@ def olx_pages(base_url, num_pages):
 
 
 def mobiauto_pages(base_url, num_pages):
-    """Mobiauto: ?page=1, ?page=2, ..."""
+    """Mobiauto: /pagina-2, /pagina-3, ..."""
     urls = [base_url]
     for p in range(2, num_pages + 1):
-        sep = "&" if "?" in base_url else "?"
-        urls.append(f"{base_url}{sep}page={p}")
+        urls.append(f"{base_url}/pagina-{p}")
     return urls
 
 
