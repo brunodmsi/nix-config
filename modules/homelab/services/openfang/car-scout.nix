@@ -228,7 +228,7 @@ in
       "f ${seenFile} 0640 root root -"
       "L+ /persist/openfang/scripts/car-scout-tool.sh - - - - ${carScoutToolScript}"
       "L+ /persist/openfang/scripts/car-search.sh - - - - ${carSearchWrapper}"
-      "C+ ${dataDir}/car-search.py 0755 root root - ${carSearchScript}"
+      "L+ ${dataDir}/car-search.py - - - - ${carSearchScript}"
     ];
 
     # Install Hand after every openfang (re)start — registrations are in-memory
