@@ -23,6 +23,7 @@ let
   carSearchWrapper = pkgs.writeShellScript "car-search" ''
     export PATH=${pkgs.coreutils}/bin:$PATH
     export PLAYWRIGHT_BROWSERS_PATH=${venvDir}/ms-playwright
+    export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib
     exec ${venvDir}/bin/python3 ${dataDir}/car-search.py "$@"
   '';
 
