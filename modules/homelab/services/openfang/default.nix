@@ -247,6 +247,10 @@ in
       ${lib.optionalString (fb.baseUrl != "") ''base_url = "${fb.baseUrl}"''}
       '') cfg.fallbackProviders}
 
+      [heartbeat]
+      check_interval_secs = 30
+      default_timeout_secs = 300
+
       [memory]
       decay_rate = 0.05
 
