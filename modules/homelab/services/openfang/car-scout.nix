@@ -222,12 +222,13 @@ in
       "L+ /persist/openfang/scripts/car-scout-tool.sh - - - - ${carScoutToolScript}"
     ];
 
-    # Install Hand on rebuild
+    # Install Hand after every openfang (re)start — registrations are in-memory
     systemd.services.openfang-install-car-scout = {
       description = "Install Car Scout Hand";
       after = [ "openfang-install.service" "openfang.service" ];
       requires = [ "openfang-install.service" ];
       wantedBy = [ "multi-user.target" ];
+      bindsTo = [ "openfang.service" ];
       environment.HOME = cfg.configDir;
       serviceConfig = {
         Type = "oneshot";
