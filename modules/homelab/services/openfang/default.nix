@@ -393,7 +393,7 @@ in
       wants = [ "network-online.target" ];
       requires = [ "openfang-install.service" "openfang-message-router.service" ];
       wantedBy = [ "multi-user.target" ];
-      path = with pkgs; [ bash coreutils ];
+      path = with pkgs; [ bash coreutils git nodejs_22 ];
       environment = {
         HOME = cfg.configDir;
         WHATSAPP_GATEWAY_PORT = toString cfg.whatsappGatewayPort;
