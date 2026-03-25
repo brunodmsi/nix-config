@@ -200,17 +200,17 @@
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
         skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" "homelab-nextcloud" ];
-        llmProvider = "google";
-        llmModel = "gemini-2.5-flash";
-        apiKeyEnvVar = "GEMINI_API_KEY";
-        apiKeyFile = config.age.secrets.geminiApiKey.path;
+        llmProvider = "anthropic";
+        llmModel = "claude-haiku-4-5-20251001";
+        apiKeyEnvVar = "ANTHROPIC_API_KEY";
+        apiKeyFile = config.age.secrets.openfangApiKey.path;
         allowedSendersFile = config.age.secrets.whatsappAllowedSenders.path;
         tavilyApiKeyFile = config.age.secrets.tavilyApiKey.path;
         fallbackProviders = [{
-          provider = "anthropic";
-          model = "claude-haiku-4-5-20251001";
-          apiKeyEnvVar = "ANTHROPIC_API_KEY";
-          apiKeyFile = config.age.secrets.openfangApiKey.path;
+          provider = "google";
+          model = "gemini-2.5-flash";
+          apiKeyEnvVar = "GEMINI_API_KEY";
+          apiKeyFile = config.age.secrets.geminiApiKey.path;
         }];
         jellyseerr = {
           enable = true;
