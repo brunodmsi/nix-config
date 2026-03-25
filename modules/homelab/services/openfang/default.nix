@@ -163,13 +163,18 @@ in
 
   config = lib.mkIf cfg.enable {
     # Node.js >= 18 required for WhatsApp Web gateway
-    environment.systemPackages = [ pkgs.nodejs_22 ];
+    environment.systemPackages = [
+      pkgs.nodejs_22
+      (pkgs.writeShellScriptBin "openfang" ''
+        export HOME=${cfg.configDir}
+        exec ${cfg.configDir}/.openfang/bin/openfang "$@"
+      '')
+    ];
 
-    # Ensure directories exist + symlink binary to PATH
+    # Ensure directories exist
     systemd.tmpfiles.rules = [
       "d ${cfg.configDir} 0750 root root - -"
       "d ${cfg.dataDir} 0750 root root - -"
-      "L+ /usr/local/bin/openfang - - - - ${cfg.configDir}/.openfang/bin/openfang"
     ];
 
     # Install OpenFang binary
