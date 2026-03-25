@@ -195,12 +195,19 @@
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
         '';
         skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" "homelab-nextcloud" ];
-        llmProvider = "anthropic";
-        llmModel = "claude-haiku-4-5-20251001";
-        apiKeyEnvVar = "ANTHROPIC_API_KEY";
-        apiKeyFile = config.age.secrets.openfangApiKey.path;
+        llmProvider = "openai";
+        llmModel = "google/gemini-2.5-flash";
+        apiKeyEnvVar = "OPENROUTER_API_KEY";
+        apiKeyFile = config.age.secrets.openRouterApiKey.path;
+        baseUrl = "https://openrouter.ai/api/v1";
         allowedSendersFile = config.age.secrets.whatsappAllowedSenders.path;
         tavilyApiKeyFile = config.age.secrets.tavilyApiKey.path;
+        fallbackProviders = [{
+          provider = "anthropic";
+          model = "claude-haiku-4-5-20251001";
+          apiKeyEnvVar = "ANTHROPIC_API_KEY";
+          apiKeyFile = config.age.secrets.openfangApiKey.path;
+        }];
         jellyseerr = {
           enable = true;
           apiKeyFile = config.age.secrets.jellyseerrApiKey.path;

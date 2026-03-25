@@ -121,6 +121,7 @@
       nextcloudAppPassword.file = "${inputs.secrets}/nextcloudAppPassword.age";
       geminiApiKey.file = "${inputs.secrets}/geminiApiKey.age";
       tavilyApiKey.file = "${inputs.secrets}/tavilyApiKey.age";
+      openRouterApiKey.file = "${inputs.secrets}/openRouterApiKey.age";
     };
   };
 

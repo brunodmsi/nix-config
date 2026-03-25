@@ -38,6 +38,11 @@ in
       type = lib.types.path;
       description = "Path to file containing the LLM API key";
     };
+    baseUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Base URL for OpenAI-compatible providers (e.g. OpenRouter)";
+    };
     allowedSendersFile = lib.mkOption {
       type = lib.types.path;
       description = "Path to file with allowed WhatsApp numbers, one per line";
@@ -278,6 +283,7 @@ in
       provider = "${cfg.llmProvider}"
       model = "${cfg.llmModel}"
       api_key_env = "${cfg.apiKeyEnvVar}"
+      ${lib.optionalString (cfg.baseUrl != "") ''base_url = "${cfg.baseUrl}"''}
 
       ${lib.concatMapStringsSep "\n" (fb: ''
       [[fallback_providers]]
