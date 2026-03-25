@@ -160,6 +160,11 @@ in
       default = "Services";
     };
     playwright.enable = lib.mkEnableOption "Shared Playwright Python venv for browser automation";
+    tavilyApiKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to file containing the Tavily API key for web_search";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -324,6 +329,9 @@ in
           ${lib.concatMapStringsSep "\n" (fb: lib.optionalString (fb.apiKeyEnvVar != "" && fb.apiKeyFile != "/dev/null") ''
           export ${fb.apiKeyEnvVar}=$(cat ${fb.apiKeyFile})
           '') cfg.fallbackProviders}
+          ${lib.optionalString (cfg.tavilyApiKeyFile != null) ''
+          export TAVILY_API_KEY=$(cat ${cfg.tavilyApiKeyFile})
+          ''}
           export HOME=${cfg.configDir}
           exec ${cfg.configDir}/.openfang/bin/openfang start --yolo --config ${cfg.configDir}/.openfang/config.toml
         '';

@@ -203,6 +203,7 @@
         apiKeyEnvVar = "ANTHROPIC_API_KEY";
         apiKeyFile = config.age.secrets.openfangApiKey.path;
         allowedSendersFile = config.age.secrets.whatsappAllowedSenders.path;
+        tavilyApiKeyFile = config.age.secrets.tavilyApiKey.path;
         jellyseerr = {
           enable = true;
           apiKeyFile = config.age.secrets.jellyseerrApiKey.path;
