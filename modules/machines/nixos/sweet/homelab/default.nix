@@ -219,7 +219,6 @@
           apiKeyFile = config.age.secrets.nextcloudAppPassword.path;
         };
         playwright.enable = true;
-        carScout.enable = false;
       };
       # Monitoring
       prometheus.enable = true;
