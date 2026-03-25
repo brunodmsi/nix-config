@@ -1,0 +1,27 @@
+[hand]
+id = "car-scout"
+name = "Car Scout"
+description = "Monitors used car listings for underpriced deals and notifies via WhatsApp"
+category = "Research"
+icon = "car"
+version = "1.0.0"
+
+[hand.requires]
+tools = ["web_search", "web_fetch", "shell_exec"]
+
+[hand.settings]
+notify_phone = { type = "string", description = "WhatsApp phone number for deal alerts (with country code, e.g. +5511999999999)" }
+gateway_url = { type = "string", description = "WhatsApp gateway URL for sending notifications" }
+
+[hand.agent]
+provider = "google"
+model = "gemini-2.5-flash"
+api_key_env = "GEMINI_API_KEY"
+temperature = 0.1
+max_iterations = 50
+
+[hand.schedule]
+cron = "0 */3 * * *"
+
+[hand.dashboard]
+metrics = ["listings_scanned", "deals_found", "notifications_sent"]

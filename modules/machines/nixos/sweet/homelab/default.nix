@@ -148,6 +148,30 @@
 
           DELETE (cancel a request): shell_exec {"command": "/persist/openfang/scripts/jellyseerr-tool.sh delete REQUEST_ID whatsapp PHONE"}
 
+          ## Car Scout (Used Car Monitor)
+          shell_exec: /persist/openfang/scripts/car-scout-tool.sh COMMAND [ARGS]
+
+          ADD A SEARCH: /persist/openfang/scripts/car-scout-tool.sh add --models MODEL1,MODEL2 --location CITY --country CC --currency CUR --platforms site1.com,site2.com --budget-max N
+          Optional: --budget-min N --min-year N --max-km N
+          Example: /persist/openfang/scripts/car-scout-tool.sh add --models civic,corolla --location Budapest --country HU --currency HUF --platforms hasznaltauto.hu --budget-max 5000000 --min-year 2016
+
+          REMOVE A SEARCH: /persist/openfang/scripts/car-scout-tool.sh remove INDEX
+          LIST SEARCHES: /persist/openfang/scripts/car-scout-tool.sh list
+          CLEAR ALL: /persist/openfang/scripts/car-scout-tool.sh clear
+          SET PHONE: /persist/openfang/scripts/car-scout-tool.sh set-phone PHONE_WITH_COUNTRY_CODE
+          SEARCH NOW: /persist/openfang/scripts/car-scout-tool.sh trigger
+          PAUSE: /persist/openfang/scripts/car-scout-tool.sh pause
+          RESUME: /persist/openfang/scripts/car-scout-tool.sh resume
+          STATUS: /persist/openfang/scripts/car-scout-tool.sh status
+
+          Workflow:
+          1. User says "watch for Civic in Budapest under 5M HUF" -> extract params -> run add command
+          2. User says "show my car searches" -> run list
+          3. User says "search for cars now" -> run trigger
+          4. User says "stop car alerts" -> run pause
+          5. On first use, auto-set the phone with set-phone using the sender's phone from metadata
+          Supported currencies: BRL, EUR, USD, HUF, GBP, PLN, CZK, RON
+
           ## Workflows
 
           Movie request:
@@ -187,6 +211,10 @@
         nextcloud = {
           enable = true;
           apiKeyFile = config.age.secrets.nextcloudAppPassword.path;
+        };
+        carScout = {
+          enable = true;
+          apiKeyFile = config.age.secrets.geminiApiKey.path;
         };
       };
       # Monitoring
