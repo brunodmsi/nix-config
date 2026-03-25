@@ -132,6 +132,14 @@
           Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]
           ALWAYS pass the sender's phone number as the last argument.
 
+          ## Updates (Nix Config Dependency Watcher)
+          shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND
+          Commands: check (check for updates), status (show last check)
+
+          ## Backup Health
+          shell_exec: /persist/openfang/scripts/backup-tool.sh COMMAND
+          Commands: analyze (full backup health report), freshness (when was last backup)
+
           ## Jellyseerr Commands (shell_exec)
           You have DIRECT ACCESS to Jellyseerr. Do NOT tell users to go to a UI — YOU handle everything.
 

@@ -10,7 +10,7 @@ let
   patchScript = ./patch-gateway.py;
 in
 {
-  imports = [ ./database.nix ./jellyseerr-bridge.nix ./message-router.nix ./wa-notify.nix ./skills.nix ./monitoring.nix ./car-scout.nix ];
+  imports = [ ./database.nix ./jellyseerr-bridge.nix ./message-router.nix ./wa-notify.nix ./skills.nix ./monitoring.nix ./car-scout.nix ./update-watcher.nix ./backup-agent.nix ];
 
   options.homelab.services.openfang = {
     enable = lib.mkEnableOption "OpenFang AI Agent";
