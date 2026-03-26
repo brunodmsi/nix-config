@@ -412,6 +412,7 @@ in
         Type = "simple";
         ExecStartPre = pkgs.writeShellScript "openfang-wa-gateway-install" ''
           export PATH=${pkgs.git}/bin:${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:$PATH
+          export npm_config_cache="${cfg.dataDir}/.npm-cache"
           GATEWAY_DIR="${cfg.dataDir}/whatsapp-gateway"
 
           # Re-fetch gateway if missing or patch version changed
