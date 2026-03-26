@@ -876,7 +876,7 @@ let
 
     def nextcloud_note_add(inp):
         title = inp.get("title", "")
-        content = inp.get("content", "")
+        content = inp.get("content", "").replace("\\n", "\n")
         if not title:
             return "Error: title is required"
         data = nc_request(
@@ -1284,7 +1284,15 @@ END:VCALENDAR"""
       note-add)
         TITLE="''${ARGS[1]}"
         CONTENT="''${ARGS[*]:2}"
-        echo "{\"tool\":\"nextcloud_note_add\",\"input\":{\"title\":\"$TITLE\",\"content\":\"$CONTENT\"$NC_JSON}}" | python3 "$SKILL_PY"
+        # Use jq to safely build JSON (handles newlines, quotes, special chars)
+        ${pkgs.jq}/bin/jq -n \
+          --arg tool "nextcloud_note_add" \
+          --arg title "$TITLE" \
+          --arg content "$CONTENT" \
+          --arg nc_user "''${NC_USER:-}" \
+          --arg nc_pass "''${NC_PASS:-}" \
+          '{tool: $tool, input: ({title: $title, content: $content} + (if $nc_user != "" then {nc_user: $nc_user} else {} end) + (if $nc_pass != "" then {nc_password: $nc_pass} else {} end))}' \
+          | python3 "$SKILL_PY"
         ;;
       calendar)
         echo "{\"tool\":\"nextcloud_calendar\",\"input\":{\"range\":\"''${ARG:-today}\"$NC_JSON}}" | python3 "$SKILL_PY"

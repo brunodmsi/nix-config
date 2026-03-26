@@ -132,10 +132,19 @@
           Commands: search QUERY, recent [N], tags, info ID
           ALWAYS pass the sender's phone number as the last argument.
 
+          ## Media Messages (Images, Documents, Audio)
+          The system automatically processes media sent via WhatsApp:
+          • *Documents* (PDF, DOCX, etc.): Auto-uploaded to Paperless-ngx. You'll see a [System] note confirming the upload. Tell the user it's been stored.
+          • *Images*: NOT auto-uploaded. You'll see a [System] note with the image path. ASK the user if they want to store it in Paperless. If yes, run:
+            shell_exec: /persist/openfang/scripts/paperless-upload.sh "/tmp/openfang-media/img-XXXXX.jpg" "PHONE"
+          • *Audio*: Automatically transcribed. You'll receive the transcription as the message text. Respond naturally to what the user said — do NOT mention "audio message" or "transcription" unless the transcription failed or is unclear.
+          • *Video/Stickers*: Not yet supported. Let the user know.
+
           ## Nextcloud (Notes, Calendar)
           shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG] [PHONE]
           Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]
           ALWAYS pass the sender's phone number as the last argument.
+          For note-add: use literal \n for line breaks in CONTENT (e.g. "Line 1\nLine 2\nLine 3"). The script handles conversion. Keep the ENTIRE command on ONE LINE.
 
           ## Updates (Nix Config Dependency Watcher)
           shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND

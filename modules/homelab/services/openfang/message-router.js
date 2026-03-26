@@ -2,6 +2,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
+import { processMedia } from './media-handler.js';
 
 const ROUTER_PORT = parseInt(process.env.ROUTER_PORT || '50052');
 const OPENFANG_API = (process.env.OPENFANG_API || 'http://127.0.0.1:50051').replace(/\/+$/, '');
@@ -56,31 +57,35 @@ async function processQueue(sender) {
 // --- Helpers ---
 
 function loadAllowedSenders() {
-  if (!ALLOWED_SENDERS_FILE) return null; // no file = allow all
+  if (!ALLOWED_SENDERS_FILE) {
+    console.error('[router] ALLOWED_SENDERS_FILE not configured — denying all');
+    return null;
+  }
   try {
     return fs.readFileSync(ALLOWED_SENDERS_FILE, 'utf8')
       .split('\n')
       .map(l => l.trim())
       .filter(l => l && !l.startsWith('#'));
   } catch (e) {
-    console.error('[router] Could not read allowed senders file:', e.message);
+    console.error('[router] Could not read allowed senders file — denying all:', e.message);
     return null;
   }
 }
 
 function isSenderAllowed(sender) {
   const allowed = loadAllowedSenders();
-  if (!allowed) return true; // no file = allow all
-  const stripped = sender.replace(/\+/g, '');
-  return allowed.some(num => stripped.includes(num.replace(/\+/g, '')));
+  if (!allowed) return false; // fail closed: no file = deny all
+  const stripped = sender.replace(/[^0-9]/g, '');
+  return allowed.some(num => stripped === num.replace(/[^0-9]/g, ''));
 }
 
 function psql(query) {
   try {
-    return execSync(
-      `psql -t -A -c "${query.replace(/"/g, '\\"')}" "${DB_URL}"`,
-      { encoding: 'utf8', timeout: 5000 }
-    ).trim();
+    return execSync('psql -t -A -c "$SQL" "$DB"', {
+      encoding: 'utf8',
+      timeout: 5000,
+      env: { ...process.env, SQL: query, DB: DB_URL },
+    }).trim();
   } catch (e) {
     console.error('[router] psql error:', e.message);
     return '';
@@ -236,7 +241,37 @@ async function handleSenderMessage({ req, res, body, parsed }) {
   const sender = parsed.metadata?.sender;
   const displayName = parsed.metadata?.sender_name;
   const remoteJid = parsed.metadata?.remote_jid;
-  const messageContent = parsed.content || parsed.message || '';
+  let messageContent = parsed.content || parsed.message || '';
+
+  // --- Media processing ---
+  let mediaResult = null;
+  try {
+    mediaResult = await processMedia(parsed);
+  } catch (e) {
+    console.error('[router] media processing error:', e.message);
+  }
+
+  if (mediaResult) {
+    // Use transcription as the message content if available
+    if (mediaResult.contentOverride) {
+      messageContent = mediaResult.contentOverride;
+    }
+
+    // Prepend system context about the media
+    if (mediaResult.contentPrefix) {
+      messageContent = mediaResult.contentPrefix + '\n\n' + (messageContent || '');
+    }
+
+    // Strip base64 media data from payload before forwarding to OpenFang
+    if (mediaResult.stripMedia) {
+      delete parsed.metadata.media_base64;
+    }
+
+    // Update the parsed payload with enriched content
+    parsed.content = messageContent;
+    parsed.message = messageContent;
+    body = JSON.stringify(parsed);
+  }
 
   const agentId = getAgentForSender(sender, displayName, remoteJid);
   if (!agentId) {
@@ -246,14 +281,15 @@ async function handleSenderMessage({ req, res, body, parsed }) {
     return;
   }
 
-  // Log incoming message
+  // Log incoming message (without base64 data)
   logConversation(sender, 'in', messageContent, {
     sender_name: displayName,
     agent_id: agentId,
+    media_type: parsed.metadata?.media_type || null,
   });
 
   const targetUrl = OPENFANG_API + '/api/agents/' + agentId + '/message';
-  console.log('[router] ' + sender + ' -> agent ' + agentId);
+  console.log('[router] ' + sender + ' -> agent ' + agentId + (parsed.metadata?.media_type ? ' [' + parsed.metadata.media_type + ']' : ''));
 
   // Proxy and capture response for logging
   try {
