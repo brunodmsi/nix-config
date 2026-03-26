@@ -1283,7 +1283,13 @@ END:VCALENDAR"""
         ;;
       note-add)
         TITLE="''${ARGS[1]}"
-        CONTENT="''${ARGS[*]:2}"
+        # Check if content comes from a file (--file /path)
+        if [ "''${ARGS[2]}" = "--file" ] && [ -f "''${ARGS[3]}" ]; then
+          CONTENT=$(cat "''${ARGS[3]}")
+          rm -f "''${ARGS[3]}"
+        else
+          CONTENT="''${ARGS[*]:2}"
+        fi
         # Use jq to safely build JSON (handles newlines, quotes, special chars)
         ${pkgs.jq}/bin/jq -cn \
           --arg tool "nextcloud_note_add" \
@@ -1331,6 +1337,17 @@ END:VCALENDAR"""
     echo "[skills] Done. Installed skills:"
     ${openfangBin} skill list --config ${openfangConfig} 2>&1 || true
   '';
+
+  # Helper: write content to a temp file (for note-add --file)
+  writeTmpScript = pkgs.writeShellScript "write-tmp" ''
+    export PATH=${pkgs.coreutils}/bin:$PATH
+    NAME="$1"
+    shift
+    CONTENT="$*"
+    OUTFILE="/tmp/openfang-note-''${NAME}.txt"
+    printf '%b' "$CONTENT" > "$OUTFILE"
+    echo "$OUTFILE"
+  '';
 in
 {
   config = lib.mkIf cfg.enable {
@@ -1344,6 +1361,7 @@ in
       "L+ /persist/openfang/scripts/paperless-tool.sh - - - - ${paperlessToolScript}"
       "L+ /persist/openfang/scripts/nextcloud-tool.sh - - - - ${nextcloudToolScript}"
       "L+ /persist/openfang/scripts/user-lookup.sh - - - - ${userLookupScript}"
+      "L+ /persist/openfang/scripts/write-tmp.sh - - - - ${writeTmpScript}"
     ];
 
     # Install/update skills on every rebuild

@@ -142,9 +142,17 @@
 
           ## Nextcloud (Notes, Calendar)
           shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG] [PHONE]
-          Commands: notes [SEARCH], note-add TITLE [CONTENT], calendar [today|tomorrow|week]
+          Commands: notes [SEARCH], note-add (see below), calendar [today|tomorrow|week]
           ALWAYS pass the sender's phone number as the last argument.
-          For note-add: use literal \n for line breaks in CONTENT (e.g. "Line 1\nLine 2\nLine 3"). The script handles conversion. Keep the ENTIRE command on ONE LINE.
+
+          ### Saving notes (ALWAYS use this two-step process):
+          Step 1 — write content to temp file:
+            shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "Full content here using \n for line breaks"
+            (returns the file path)
+          Step 2 — save to Nextcloud:
+            shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-add "Note Title" --file /tmp/openfang-note-SLUG.txt PHONE
+
+          CRITICAL: ALWAYS save ALL content in a SINGLE note. NEVER split into multiple notes. If the user sends a list of items, put them ALL in one note.
 
           ## Updates (Nix Config Dependency Watcher)
           shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND
