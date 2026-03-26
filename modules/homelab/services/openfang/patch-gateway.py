@@ -2,7 +2,7 @@ import sys, pathlib
 
 f = pathlib.Path(sys.argv[1])
 src = f.read_text()
-if "PATCHED_V8" in src:
+if "PATCHED_V9" in src:
     print("[patch] Already patched (V8)")
     sys.exit(0)
 
@@ -23,7 +23,7 @@ src = '\n'.join(lines)
 lines = src.split('\n')
 for i, line in enumerate(lines):
     if 'const replyJid' in line and 's.whatsapp.net' in line:
-        lines[i] = '          const replyJid = remoteJid; // PATCHED_V8: reply to remoteJid directly'
+        lines[i] = '          const replyJid = remoteJid; // PATCHED_V9: reply to remoteJid directly'
         break
 src = '\n'.join(lines)
 
@@ -32,7 +32,7 @@ lines = src.split('\n')
 for i, line in enumerate(lines):
     if "const phone = '+' + senderJid" in line:
         lines[i] = (
-            "      // PATCHED_V8: use senderPn (real phone) when available\n"
+            "      // PATCHED_V9: use senderPn (real phone) when available\n"
             "      const senderPn = msg.key.senderPn ? msg.key.senderPn.replace(/@.*$/, '') : null;\n"
             "      const phone = '+' + (senderPn || senderJid.replace(/@.*$/, ''));"
         )
@@ -43,7 +43,7 @@ src = '\n'.join(lines)
 if "remote_jid: remoteJid," not in src:
     src = src.replace(
         "sender_name: pushName,",
-        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V8"
+        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V9"
     )
 
 # --- Patch 5: Add media download + media fields in metadata ---
@@ -53,7 +53,7 @@ if "remote_jid: remoteJid," not in src:
 # We inject media download after phone extraction and before the payload is built.
 
 media_download_block = '''
-      // PATCHED_V8: Download media if present
+      // PATCHED_V9: Download media if present
       let media_type = null;
       let media_base64 = null;
       let media_mimetype = null;
@@ -87,7 +87,7 @@ media_download_block = '''
       }
 '''
 
-if "PATCHED_V8: Download media" not in src:
+if "PATCHED_V9: Download media" not in src:
     # Find the phone extraction line and inject after it
     lines = src.split('\n')
     inject_after = None
@@ -104,8 +104,8 @@ if "PATCHED_V8: Download media" not in src:
 # Add media fields to the metadata payload
 if "media_type: media_type," not in src:
     src = src.replace(
-        "remote_jid: remoteJid,  // PATCHED_V8",
-        "remote_jid: remoteJid,  // PATCHED_V8\n"
+        "remote_jid: remoteJid,  // PATCHED_V9",
+        "remote_jid: remoteJid,  // PATCHED_V9\n"
         "        media_type: media_type,\n"
         "        media_base64: media_base64,\n"
         "        media_mimetype: media_mimetype,\n"
@@ -131,7 +131,7 @@ for i, line in enumerate(lines):
                 field_name = line[:colon_idx].strip()
                 value_part = line[colon_idx+1:].strip().rstrip(',')
                 indent = line[:len(line) - len(line.lstrip())]
-                lines[i] = f"{indent}{field_name}: captionText || {value_part},  // PATCHED_V8: caption fallback"
+                lines[i] = f"{indent}{field_name}: (typeof captionText !== 'undefined' && captionText) || {value_part},  // PATCHED_V9: caption fallback"
                 print(f"[patch] Added caption fallback to {field_name} field (line {i+1})")
                 break
 src = '\n'.join(lines)
