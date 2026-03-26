@@ -446,7 +446,7 @@ _Autonomous coding agent — self-reviewed and scored_"
       pr-info)
         TASK_ID="$2"
         [ -z "$TASK_ID" ] && echo "Usage: coding-tasks pr-info TASK_ID" && exit 1
-        TASK_DATA=$(psql -t -A -c "SELECT repo || ' ' || COALESCE(pr_number::text, '') FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        TASK_DATA=$(psql -t -A -c "SELECT repo || ' ' || COALESCE(pr_number::text, '''') FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
         REPO=$(echo "$TASK_DATA" | cut -d' ' -f1)
         PR_NUM=$(echo "$TASK_DATA" | cut -d' ' -f2)
         if [ -n "$PR_NUM" ] && [ "$PR_NUM" != "0" ]; then
