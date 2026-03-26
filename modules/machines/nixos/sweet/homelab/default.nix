@@ -145,26 +145,28 @@
           Commands: notes [SEARCH], note-add, note-update, calendar [today|tomorrow|week]
           ALWAYS pass the sender's phone number as the last argument.
 
-          ### Creating notes (note-add) — two-step process:
-          Step 1 — write content to temp file:
-            shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "Full content here using \n for line breaks"
-          Step 2 — save to Nextcloud:
-            shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-add "Note Title" --file /tmp/openfang-note-SLUG.txt PHONE
+          ### MANDATORY note workflow — ALWAYS follow these exact steps:
 
-          ### Updating notes (note-update) — two-step process:
-          First search for the note to get its ID: notes SEARCH
-          Step 1 — write new content to temp file:
-            shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "Updated content here using \n for line breaks"
-          Step 2 — update the note by ID:
-            shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-update NOTE_ID --file /tmp/openfang-note-SLUG.txt PHONE
+          **To CREATE a new note (note-add):**
+          1. shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "# Heading\n\n- Item 1\n- Item 2\n\nMore text"
+          2. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-add "Note Title" --file /tmp/openfang-note-SLUG.txt PHONE
 
-          ### When to create vs update:
-          - If the user says "save", "add", "create" a note → use note-add (new note)
-          - If the user says "update", "edit", "change", "add to" an existing note → search first with "notes QUERY", then use note-update with the note ID
-          - If unsure whether a note already exists, search first. If found, update it. If not, create new.
+          **To UPDATE an existing note (note-update):**
+          1. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh notes SEARCH PHONE  (get the note ID)
+          2. shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "# Updated content\n\nNew content here"
+          3. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-update NOTE_ID --file /tmp/openfang-note-SLUG.txt PHONE
 
-          CRITICAL: ALWAYS save ALL content in a SINGLE note. NEVER split into multiple notes.
-          Format notes with Markdown: use # for headings, - for bullet lists, **bold** for emphasis, and \n\n for paragraph breaks. Make the note well-structured and readable.
+          **Deciding create vs update:**
+          - User says "save/add/create" a NEW topic → note-add
+          - User says "update/edit/change/fix/adjust" something → SEARCH first, then note-update with the ID
+          - If unsure, SEARCH first. If a matching note exists, UPDATE it. If not, CREATE new.
+
+          **RULES (follow strictly):**
+          - NEVER pass note content directly as arguments. ALWAYS use write-tmp.sh first, then --file.
+          - NEVER split content into multiple notes. ALL content goes in ONE note.
+          - ALWAYS format with Markdown: # headings, - bullet lists, **bold**, \n\n paragraph breaks.
+          - Use \n for line breaks in write-tmp.sh content. Example: "# Title\n\n## Section\n\n- Item 1\n- Item 2"
+          - NEVER claim a feature doesn't exist. You HAVE write-tmp.sh and note-update. USE them.
 
           ## Updates (Nix Config Dependency Watcher)
           shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND
