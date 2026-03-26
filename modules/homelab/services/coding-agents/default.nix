@@ -72,9 +72,10 @@ let
 
     git worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BASE_BRANCH" 2>&1
 
-    # Allocate preview port
-    NEXT_PORT=$(psql -t -A -c "SELECT COALESCE(MAX(preview_port), ${toString (cfg.previewBasePort - 1)}) + 1 FROM coding_tasks WHERE preview_port IS NOT NULL;" "$DB" 2>/dev/null)
-    [ -z "$NEXT_PORT" ] && NEXT_PORT=${toString cfg.previewBasePort}
+    # Allocate port block (${toString cfg.portsPerTask} ports per task: FE, BE, extra)
+    LAST_PORT=$(psql -t -A -c "SELECT COALESCE(MAX(preview_port), ${toString (cfg.previewBasePort - cfg.portsPerTask)}) FROM coding_tasks WHERE preview_port IS NOT NULL;" "$DB" 2>/dev/null)
+    [ -z "$LAST_PORT" ] && LAST_PORT=${toString (cfg.previewBasePort - cfg.portsPerTask)}
+    PORT_BASE=$((LAST_PORT + ${toString cfg.portsPerTask}))
 
     # Write task.json
     ${pkgs.jq}/bin/jq -n \
@@ -83,8 +84,9 @@ let
       --arg base "$BASE_BRANCH" \
       --arg branch "$BRANCH" \
       --arg task "$TASK" \
-      --arg port "$NEXT_PORT" \
-      '{id: $id, repo: $repo, base_branch: $base, branch: $branch, task: $task, preview_port: ($port | tonumber)}' \
+      --argjson port "$PORT_BASE" \
+      --argjson ports_per_task ${toString cfg.portsPerTask} \
+      '{id: $id, repo: $repo, base_branch: $base, branch: $branch, task: $task, preview_port: $port, ports_per_task: $ports_per_task}' \
       > "$TASK_DIR/task.json"
 
     # Insert DB record
@@ -133,6 +135,7 @@ let
 
     WORKTREE_DIR="$TASK_DIR/worktree"
     REPO_DIR="$WORKSPACE/repos/$REPO"
+    PORTS_PER_TASK=$(echo "$TASK_JSON" | jq -r '.ports_per_task // 3')
 
     # Set up auth
     export GITHUB_TOKEN=$(cat ${cfg.githubTokenFile})
@@ -147,10 +150,17 @@ let
 
     echo "[agent] Task $TASK_ID: $TASK_DESC"
     echo "[agent] Repo: $REPO | Branch: $BRANCH | Base: $BASE_BRANCH"
+    echo "[agent] Port block: $PREVIEW_PORT - $((PREVIEW_PORT + PORTS_PER_TASK - 1))"
     echo "[agent] Starting implementation..."
 
     # Phase 1: Implement
     IMPLEMENT_PROMPT="Your task: $TASK_DESC
+
+Port allocation for dev servers:
+- Frontend port: $PREVIEW_PORT
+- Backend port: $((PREVIEW_PORT + 1))
+- Extra port: $((PREVIEW_PORT + 2))
+Use these ports when configuring dev servers. The server is accessible on the LAN at http://sweet:PORT.
 
 After completing the implementation, write a file called .agent-result.json at the repository root with this exact JSON structure:
 {\"score\": <1-10>, \"summary\": \"brief description of what you did\", \"files_changed\": [\"list of files\"], \"issues\": [\"any remaining issues\"]}
@@ -268,9 +278,11 @@ _Autonomous coding agent — self-reviewed and scored_"
       PR_NUMBER=$(echo "$PR_URL" | grep -oP '/pull/\K[0-9]+' || echo "")
     fi
 
-    # Start dev server (detect from package.json)
+    # Start dev servers (detect from package.json)
     PREVIEW_URL=""
     DEV_PID=""
+    BE_PORT=$((PREVIEW_PORT + 1))
+
     if [ -f "package.json" ]; then
       # Install dependencies
       if [ -f "package-lock.json" ] || [ -f "yarn.lock" ] || [ -f "pnpm-lock.yaml" ]; then
@@ -280,12 +292,24 @@ _Autonomous coding agent — self-reviewed and scored_"
       # Detect dev command
       DEV_CMD=$(jq -r '.scripts.dev // .scripts.start // empty' package.json 2>/dev/null)
       if [ -n "$DEV_CMD" ]; then
-        echo "[agent] Starting dev server on port $PREVIEW_PORT..."
-        PORT=$PREVIEW_PORT nohup npm run dev -- --port "$PREVIEW_PORT" > "$TASK_DIR/dev-server.log" 2>&1 &
+        echo "[agent] Starting dev server on port $PREVIEW_PORT (BE on $BE_PORT)..."
+        PORT=$PREVIEW_PORT BACKEND_PORT=$BE_PORT API_PORT=$BE_PORT \
+          nohup npm run dev -- --port "$PREVIEW_PORT" > "$TASK_DIR/dev-server.log" 2>&1 &
         DEV_PID=$!
         echo "$DEV_PID" > "$TASK_DIR/dev-server.pid"
         PREVIEW_URL="http://sweet:$PREVIEW_PORT"
         echo "[agent] Dev server PID $DEV_PID on $PREVIEW_URL"
+      fi
+
+      # If there's a separate server/api script, start that on BE port
+      BE_CMD=$(jq -r '.scripts["dev:server"] // .scripts["dev:api"] // .scripts["start:server"] // empty' package.json 2>/dev/null)
+      if [ -n "$BE_CMD" ]; then
+        SCRIPT_NAME=$(jq -r 'if .scripts["dev:server"] then "dev:server" elif .scripts["dev:api"] then "dev:api" else "start:server" end' package.json 2>/dev/null)
+        echo "[agent] Starting backend on port $BE_PORT..."
+        PORT=$BE_PORT nohup npm run "$SCRIPT_NAME" -- --port "$BE_PORT" > "$TASK_DIR/be-server.log" 2>&1 &
+        BE_PID=$!
+        echo "$BE_PID" > "$TASK_DIR/be-server.pid"
+        echo "[agent] Backend PID $BE_PID on http://sweet:$BE_PORT"
       fi
     fi
 
@@ -542,7 +566,12 @@ in
     };
     maxConcurrent = lib.mkOption {
       type = lib.types.int;
-      default = 2;
+      default = 3;
+    };
+    portsPerTask = lib.mkOption {
+      type = lib.types.int;
+      default = 3;
+      description = "Ports allocated per task (e.g. frontend, backend, extra)";
     };
     previewBasePort = lib.mkOption {
       type = lib.types.int;
@@ -590,6 +619,13 @@ in
       - 7-8: Good implementation with minor improvements possible.
       - 5-6: Functional but has notable issues or doesn't fully match patterns.
       - 1-4: Incomplete or has significant problems.
+
+      ## Dev Server Ports
+      Your task prompt includes allocated ports. For full-stack projects:
+      - Use the frontend port for the main dev server (Next.js, Vite, etc.)
+      - Use the backend port for API servers (Express, Fastify, etc.)
+      - Configure the frontend to proxy API calls to the backend port
+      - Bind to 0.0.0.0 so the server is accessible on the LAN
 
       ## Rules
       - Read before you write. Always understand existing code first.
@@ -696,9 +732,50 @@ in
       };
     };
 
+    # Auth health check — verify Claude Code credentials are valid, notify if expired
+    systemd.services.coding-agents-auth-check = {
+      description = "Check Claude Code authentication status";
+      after = [ "coding-agents-install.service" "network-online.target" ];
+      wants = [ "network-online.target" ];
+      path = with pkgs; [ bash coreutils nodejs_22 ];
+      environment = {
+        HOME = cfg.workspaceDir;
+        CLAUDE_CONFIG_DIR = "${cfg.workspaceDir}/.claude";
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = pkgs.writeShellScript "coding-agents-auth-check" ''
+          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:$PATH
+          export HOME=${cfg.workspaceDir}
+          export CLAUDE_CONFIG_DIR="${cfg.workspaceDir}/.claude"
+
+          CREDS="${cfg.workspaceDir}/.claude/.credentials.json"
+          if [ ! -f "$CREDS" ]; then
+            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code not authenticated\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
+            exit 0
+          fi
+
+          # Quick check: try a minimal claude call
+          RESULT=$(timeout 30 ${claudeBin} -p "respond with exactly: OK" --max-turns 1 --output-format text 2>&1 || echo "AUTH_FAILED")
+          if echo "$RESULT" | grep -qi "auth\|unauthorized\|login\|credential\|AUTH_FAILED"; then
+            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code auth expired\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
+          fi
+        '';
+      };
+    };
+    systemd.timers.coding-agents-auth-check = {
+      description = "Daily Claude Code auth check";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "*-*-* 08:00:00";
+        Persistent = true;
+      };
+    };
+
     # Open preview port range in firewall (LAN access)
+    # maxConcurrent * portsPerTask * 3 (headroom for completed but still running previews)
     networking.firewall.allowedTCPPortRanges = [
-      { from = cfg.previewBasePort; to = cfg.previewBasePort + 20; }
+      { from = cfg.previewBasePort; to = cfg.previewBasePort + (cfg.maxConcurrent * cfg.portsPerTask * 10); }
     ];
   };
 }

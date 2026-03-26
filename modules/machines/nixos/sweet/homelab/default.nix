@@ -246,7 +246,7 @@
         scoreThreshold = 7;
         maxIterations = 3;
         maxTurns = 50;
-        maxConcurrent = 2;
+        maxConcurrent = 3;
       };
       # Monitoring
       prometheus.enable = true;
