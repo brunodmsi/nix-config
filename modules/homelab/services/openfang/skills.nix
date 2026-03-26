@@ -864,13 +864,14 @@ let
             return "No notes found." + (f" (searched: '{search}')" if search else "")
         lines = [f"Notes ({len(data)}):"]
         for note in data[:15]:
+            note_id = note.get("id", "?")
             title = note.get("title", "Untitled")
             modified = (note.get("modified") or "")
             if isinstance(modified, int):
                 modified = datetime.fromtimestamp(modified).strftime("%Y-%m-%d")
             category = note.get("category", "")
             cat_str = f" [{category}]" if category else ""
-            lines.append(f"- {title}{cat_str} ({modified})")
+            lines.append(f"- [ID:{note_id}] {title}{cat_str} ({modified})")
         return "\n".join(lines)
 
 
@@ -888,6 +889,30 @@ let
             return data["error"]
         note_id = data.get("id", "?") if isinstance(data, dict) else "?"
         return f"Note created: '{title}' (ID: {note_id})"
+
+
+    def nextcloud_note_update(inp):
+        note_id = inp.get("id", "")
+        if not note_id:
+            return "Error: note ID is required"
+        content = inp.get("content", "").replace("\\n", "\n")
+        title = inp.get("title", "")
+        update = {}
+        if content:
+            update["content"] = content
+        if title:
+            update["title"] = title
+        if not update:
+            return "Error: provide title and/or content to update"
+        data = nc_request(
+            f"/index.php/apps/notes/api/v1/notes/{note_id}",
+            method="PUT",
+            data=update
+        )
+        if isinstance(data, dict) and "error" in data:
+            return data["error"]
+        updated_title = data.get("title", "?") if isinstance(data, dict) else "?"
+        return f"Note updated: '{updated_title}' (ID: {note_id})"
 
 
     # --- Calendar (CalDAV) ---
@@ -1046,6 +1071,7 @@ END:VCALENDAR"""
     TOOLS = {
         "nextcloud_notes": nextcloud_notes,
         "nextcloud_note_add": nextcloud_note_add,
+        "nextcloud_note_update": nextcloud_note_update,
         "nextcloud_calendar": nextcloud_calendar,
         "nextcloud_tasks": nextcloud_tasks,
         "nextcloud_task_add": nextcloud_task_add,
@@ -1298,6 +1324,24 @@ END:VCALENDAR"""
           --arg nc_user "''${NC_USER:-}" \
           --arg nc_pass "''${NC_PASS:-}" \
           '{tool: $tool, input: ({title: $title, content: $content} + (if $nc_user != "" then {nc_user: $nc_user} else {} end) + (if $nc_pass != "" then {nc_password: $nc_pass} else {} end))}' \
+          | python3 "$SKILL_PY"
+        ;;
+      note-update)
+        NOTE_ID="''${ARGS[1]}"
+        # Check if content comes from a file (--file /path)
+        if [ "''${ARGS[2]}" = "--file" ] && [ -f "''${ARGS[3]}" ]; then
+          CONTENT=$(cat "''${ARGS[3]}")
+          rm -f "''${ARGS[3]}"
+        else
+          CONTENT="''${ARGS[*]:2}"
+        fi
+        ${pkgs.jq}/bin/jq -cn \
+          --arg tool "nextcloud_note_update" \
+          --arg id "$NOTE_ID" \
+          --arg content "$CONTENT" \
+          --arg nc_user "''${NC_USER:-}" \
+          --arg nc_pass "''${NC_PASS:-}" \
+          '{tool: $tool, input: ({id: $id, content: $content} + (if $nc_user != "" then {nc_user: $nc_user} else {} end) + (if $nc_pass != "" then {nc_password: $nc_pass} else {} end))}' \
           | python3 "$SKILL_PY"
         ;;
       calendar)

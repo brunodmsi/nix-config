@@ -142,17 +142,28 @@
 
           ## Nextcloud (Notes, Calendar)
           shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG] [PHONE]
-          Commands: notes [SEARCH], note-add (see below), calendar [today|tomorrow|week]
+          Commands: notes [SEARCH], note-add, note-update, calendar [today|tomorrow|week]
           ALWAYS pass the sender's phone number as the last argument.
 
-          ### Saving notes (ALWAYS use this two-step process):
+          ### Creating notes (note-add) — two-step process:
           Step 1 — write content to temp file:
             shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "Full content here using \n for line breaks"
-            (returns the file path)
           Step 2 — save to Nextcloud:
             shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-add "Note Title" --file /tmp/openfang-note-SLUG.txt PHONE
 
-          CRITICAL: ALWAYS save ALL content in a SINGLE note. NEVER split into multiple notes. If the user sends a list of items, put them ALL in one note.
+          ### Updating notes (note-update) — two-step process:
+          First search for the note to get its ID: notes SEARCH
+          Step 1 — write new content to temp file:
+            shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "Updated content here using \n for line breaks"
+          Step 2 — update the note by ID:
+            shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-update NOTE_ID --file /tmp/openfang-note-SLUG.txt PHONE
+
+          ### When to create vs update:
+          - If the user says "save", "add", "create" a note → use note-add (new note)
+          - If the user says "update", "edit", "change", "add to" an existing note → search first with "notes QUERY", then use note-update with the note ID
+          - If unsure whether a note already exists, search first. If found, update it. If not, create new.
+
+          CRITICAL: ALWAYS save ALL content in a SINGLE note. NEVER split into multiple notes.
 
           ## Updates (Nix Config Dependency Watcher)
           shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND
