@@ -177,6 +177,23 @@ function getAgentForSender(sender, displayName, remoteJid) {
 
 // --- Async reply via gateway ---
 
+function sendTypingIndicator(jid) {
+  if (!jid) return;
+  const payload = JSON.stringify({ jid, action: 'composing' });
+  const url = new URL(GATEWAY_URL + '/api/send');
+  const req = http.request({
+    hostname: url.hostname,
+    port: url.port,
+    path: url.pathname,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    timeout: 5000,
+  });
+  req.on('error', () => {}); // fire and forget
+  req.write(payload);
+  req.end();
+}
+
 function sendReplyViaGateway(jid, text, quotedId) {
   return new Promise((resolve) => {
     const payload = JSON.stringify({ jid, text, quotedId: quotedId || undefined });
@@ -316,9 +333,14 @@ async function handleSenderMessage({ req, res, body, parsed }) {
   res.writeHead(200);
   res.end(JSON.stringify({ status: 'accepted' }));
 
+  // Start typing indicator — refreshes every 15s (WhatsApp expires after ~25s)
+  sendTypingIndicator(remoteJid);
+  const typingInterval = setInterval(() => sendTypingIndicator(remoteJid), 15000);
+
   // Proxy to OpenFang async — gateway is already free
   try {
     const responseBody = await proxyToOpenfang(targetUrl, body, req.headers);
+    clearInterval(typingInterval);
 
     // Extract reply text
     let replyText = '';
@@ -344,6 +366,7 @@ async function handleSenderMessage({ req, res, body, parsed }) {
       }
     }
   } catch (e) {
+    clearInterval(typingInterval);
     console.error('[router] OpenFang proxy error for ' + sender + ':', e.message);
     logConversation(sender, 'out', 'ERROR: ' + e.message, { agent_id: agentId });
 

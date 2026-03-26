@@ -2,12 +2,12 @@ import sys, pathlib
 
 f = pathlib.Path(sys.argv[1])
 src = f.read_text()
-if "PATCHED_V10" in src:
+if "PATCHED_V11" in src:
     print("[patch] Already patched (V8)")
     sys.exit(0)
 
 # Remove old patch markers
-for old_v in ["PATCHED_V7", "PATCHED_V8", "PATCHED_V9"]:
+for old_v in ["PATCHED_V7", "PATCHED_V8", "PATCHED_V9", "PATCHED_V10"]:
     src = src.replace(old_v, "")
 
 # --- Patch 1: Add downloadMediaMessage to Baileys import ---
@@ -24,7 +24,7 @@ src = '\n'.join(lines)
 lines = src.split('\n')
 for i, line in enumerate(lines):
     if 'const replyJid' in line and 's.whatsapp.net' in line:
-        lines[i] = '          const replyJid = remoteJid; // PATCHED_V10: reply to remoteJid directly'
+        lines[i] = '          const replyJid = remoteJid; // PATCHED_V11: reply to remoteJid directly'
         break
 src = '\n'.join(lines)
 
@@ -33,7 +33,7 @@ lines = src.split('\n')
 for i, line in enumerate(lines):
     if "const phone = '+' + senderJid" in line:
         lines[i] = (
-            "      // PATCHED_V10: use senderPn (real phone) when available\n"
+            "      // PATCHED_V11: use senderPn (real phone) when available\n"
             "      const senderPn = msg.key.senderPn ? msg.key.senderPn.replace(/@.*$/, '') : null;\n"
             "      const phone = '+' + (senderPn || senderJid.replace(/@.*$/, ''));"
         )
@@ -44,7 +44,7 @@ src = '\n'.join(lines)
 if "remote_jid: remoteJid," not in src:
     src = src.replace(
         "sender_name: pushName,",
-        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V10\n        message_id: msg.key.id,  // PATCHED_V10: for reply quoting"
+        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V11\n        message_id: msg.key.id,  // PATCHED_V11: for reply quoting"
     )
 
 # --- Patch 5: Add media download + media fields in metadata ---
@@ -54,7 +54,7 @@ if "remote_jid: remoteJid," not in src:
 # We inject media download after phone extraction and before the payload is built.
 
 media_download_block = '''
-      // PATCHED_V10: Download media if present
+      // PATCHED_V11: Download media if present
       let media_type = null;
       let media_base64 = null;
       let media_mimetype = null;
@@ -88,7 +88,7 @@ media_download_block = '''
       }
 '''
 
-if "PATCHED_V10: Download media" not in src:
+if "PATCHED_V11: Download media" not in src:
     # Find the phone extraction line and inject after it
     lines = src.split('\n')
     inject_after = None
@@ -105,8 +105,8 @@ if "PATCHED_V10: Download media" not in src:
 # Add media fields to the metadata payload
 if "media_type: media_type," not in src:
     src = src.replace(
-        "remote_jid: remoteJid,  // PATCHED_V10",
-        "remote_jid: remoteJid,  // PATCHED_V10\n"
+        "remote_jid: remoteJid,  // PATCHED_V11",
+        "remote_jid: remoteJid,  // PATCHED_V11\n"
         "        media_type: media_type,\n"
         "        media_base64: media_base64,\n"
         "        media_mimetype: media_mimetype,\n"
@@ -132,7 +132,7 @@ for i, line in enumerate(lines):
                 field_name = line[:colon_idx].strip()
                 value_part = line[colon_idx+1:].strip().rstrip(',')
                 indent = line[:len(line) - len(line.lstrip())]
-                lines[i] = f"{indent}{field_name}: (typeof captionText !== 'undefined' && captionText) || {value_part},  // PATCHED_V10: caption fallback"
+                lines[i] = f"{indent}{field_name}: (typeof captionText !== 'undefined' && captionText) || {value_part},  // PATCHED_V11: caption fallback"
                 print(f"[patch] Added caption fallback to {field_name} field (line {i+1})")
                 break
 src = '\n'.join(lines)
@@ -142,7 +142,7 @@ src = '\n'.join(lines)
 # We add a small HTTP server alongside the Baileys socket.
 
 # Import for HTTP send server (add to top with other imports)
-import_line = "import { createServer as createHttpSendServer } from 'node:http'; // PATCHED_V10"
+import_line = "import { createServer as createHttpSendServer } from 'node:http'; // PATCHED_V11"
 if "createHttpSendServer" not in src:
     lines = src.split('\n')
     last_import = 0
@@ -156,7 +156,7 @@ if "createHttpSendServer" not in src:
 
 # Send endpoint server (append to end of file — sock is already initialized)
 send_endpoint_block = '''
-// PATCHED_V10: HTTP send endpoint for async replies from router
+// PATCHED_V11: HTTP send endpoint for async replies from router
 const SEND_PORT = parseInt(process.env.WHATSAPP_SEND_PORT || '3010');
 const sendServer = createHttpSendServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/send') {
@@ -164,10 +164,24 @@ const sendServer = createHttpSendServer((req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { jid, text, quotedId } = JSON.parse(body);
-        if (!jid || !text) {
+        const parsed = JSON.parse(body);
+        const { jid } = parsed;
+        if (!jid) {
           res.writeHead(400);
-          res.end(JSON.stringify({ error: 'jid and text required' }));
+          res.end(JSON.stringify({ error: 'jid required' }));
+          return;
+        }
+        // Typing indicator
+        if (parsed.action === 'composing') {
+          await sock.sendPresenceUpdate('composing', jid);
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        const { text, quotedId } = parsed;
+        if (!text) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'text required' }));
           return;
         }
         const msgOptions = { text };
@@ -194,14 +208,14 @@ sendServer.listen(SEND_PORT, '127.0.0.1', () => {
 });
 '''
 
-if "PATCHED_V10: HTTP send endpoint" not in src:
+if "PATCHED_V11: HTTP send endpoint" not in src:
     src = src.rstrip() + '\n' + send_endpoint_block
     print("[patch] Appended send endpoint to end of file")
 
 # --- Patch 8: Suppress reply when router returns {"status":"accepted"} ---
 # The gateway normally sends the response text as a WhatsApp reply.
 # With async routing, the response is {"status":"accepted"} — skip the reply.
-if 'PATCHED_V10: skip accepted' not in src:
+if 'PATCHED_V11: skip accepted' not in src:
     # Find the sendMessage reply line and wrap it with a check
     lines = src.split('\n')
     for i, line in enumerate(lines):
@@ -209,7 +223,7 @@ if 'PATCHED_V10: skip accepted' not in src:
             indent = line[:len(line) - len(line.lstrip())]
             # Wrap with check: skip if response is {"status":"accepted"}
             lines[i] = (
-                f'{indent}// PATCHED_V10: skip accepted (async reply handled by router)\n'
+                f'{indent}// PATCHED_V11: skip accepted (async reply handled by router)\n'
                 f'{indent}if (typeof responseText !== "undefined" && responseText && !responseText.includes(\'"status":"accepted"\')) {{\n'
                 f'{line}\n'
                 f'{indent}}}'
