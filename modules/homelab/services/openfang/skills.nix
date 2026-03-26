@@ -1319,7 +1319,7 @@ END:VCALENDAR"""
     fi
     case "$CMD" in
       note-get)
-        echo "{\"tool\":\"nextcloud_note_get\",\"input\":{\"id\":\"$ARG\"$NC_JSON}}" | python3 "$SKILL_PY"
+        echo "{\"tool\":\"nextcloud_note_get\",\"input\":{\"id\":\"''${ARGS[1]}\"$NC_JSON}}" | python3 "$SKILL_PY"
         ;;
       notes)
         if [ -n "$ARG" ]; then
