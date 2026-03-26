@@ -99,7 +99,7 @@ let
       > "$TASK_DIR/task.json"
 
     # Insert DB record
-    SAFE_TASK=$(echo "$TASK" | sed "s/'/''/g")
+    SAFE_TASK=$(echo "$TASK" | sed "s/'''/''''/g")
     psql -c "INSERT INTO coding_tasks (id, repo, branch, base_branch, task_description, status, log_file) VALUES ('$TASK_ID', '$REPO', '$BRANCH', '$BASE_BRANCH', '$SAFE_TASK', 'queued', '$TASK_DIR/agent.log');" "$DB"
 
     # Start background service
@@ -128,7 +128,7 @@ let
     on_error() {
       local err_msg
       err_msg=$(tail -5 "$TASK_DIR/agent.log" 2>/dev/null | head -c 500 || echo "unknown error")
-      err_msg=$(echo "$err_msg" | sed "s/'/''/g")
+      err_msg=$(echo "$err_msg" | sed "s/'''/''''/g")
       psql -c "UPDATE coding_tasks SET status='failed', error='$err_msg', updated_at=NOW() WHERE id='$TASK_ID';" "$DB" 2>/dev/null || true
       ${waNotify} "" "$(printf '❌ *Coding Agent Failed*\nTask: %s\nError: %s' "$TASK_ID" "$(tail -3 "$TASK_DIR/agent.log" 2>/dev/null | head -c 200)")" 2>/dev/null || true
     }
@@ -291,7 +291,7 @@ _Autonomous coding agent — self-reviewed and scored_"
     fi
 
     # Update DB
-    SAFE_PR_URL=$(echo "$PR_URL" | sed "s/'/''/g" | head -1)
+    SAFE_PR_URL=$(echo "$PR_URL" | sed "s/'''/''''/g" | head -1)
     psql -c "UPDATE coding_tasks SET status='done', score=$SCORE, iterations=$ITERATIONS, pr_url='$SAFE_PR_URL', pr_number=$(echo "''${PR_NUMBER:-0}"), completed_at=NOW(), updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
 
     # Notify via WhatsApp
