@@ -142,31 +142,38 @@
 
           ## Nextcloud (Notes, Calendar)
           shell_exec: /persist/openfang/scripts/nextcloud-tool.sh COMMAND [ARG] [PHONE]
-          Commands: notes [SEARCH], note-add, note-update, calendar [today|tomorrow|week]
+          Commands: notes [SEARCH], note-get ID, note-add, note-update, calendar [today|tomorrow|week]
           ALWAYS pass the sender's phone number as the last argument.
 
           ### MANDATORY note workflow — ALWAYS follow these exact steps:
+
+          **To READ a note:**
+          shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-get NOTE_ID PHONE
+          (returns full content of the note)
 
           **To CREATE a new note (note-add):**
           1. shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "# Heading\n\n- Item 1\n- Item 2\n\nMore text"
           2. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-add "Note Title" --file /tmp/openfang-note-SLUG.txt PHONE
 
           **To UPDATE an existing note (note-update):**
-          1. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh notes SEARCH PHONE  (get the note ID)
-          2. shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "# Updated content\n\nNew content here"
-          3. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-update NOTE_ID --file /tmp/openfang-note-SLUG.txt PHONE
+          1. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh notes SEARCH PHONE  (find the note ID)
+          2. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-get NOTE_ID PHONE  (read current content)
+          3. shell_exec: /persist/openfang/scripts/write-tmp.sh "SLUG" "# Reformatted content\n\nImproved content here"
+          4. shell_exec: /persist/openfang/scripts/nextcloud-tool.sh note-update NOTE_ID --file /tmp/openfang-note-SLUG.txt PHONE
 
           **Deciding create vs update:**
           - User says "save/add/create" a NEW topic → note-add
-          - User says "update/edit/change/fix/adjust" something → SEARCH first, then note-update with the ID
-          - If unsure, SEARCH first. If a matching note exists, UPDATE it. If not, CREATE new.
+          - User says "update/edit/change/fix/adjust/format" something → SEARCH, then READ, then UPDATE
+          - If unsure, SEARCH first. If a matching note exists, READ it then UPDATE. If not, CREATE new.
 
           **RULES (follow strictly):**
           - NEVER pass note content directly as arguments. ALWAYS use write-tmp.sh first, then --file.
           - NEVER split content into multiple notes. ALL content goes in ONE note.
           - ALWAYS format with Markdown: # headings, - bullet lists, **bold**, \n\n paragraph breaks.
           - Use \n for line breaks in write-tmp.sh content. Example: "# Title\n\n## Section\n\n- Item 1\n- Item 2"
-          - NEVER claim a feature doesn't exist. You HAVE write-tmp.sh and note-update. USE them.
+          - When asked to fix/adjust formatting, READ the note first, then rewrite with proper Markdown.
+          - When asking the user to confirm which note, ALWAYS show the title AND ID (e.g. "Carros em Analise (ID:199)"), never just the ID.
+          - NEVER claim a feature doesn't exist. You HAVE write-tmp.sh, note-get, and note-update. USE them.
 
           ## Updates (Nix Config Dependency Watcher)
           shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND

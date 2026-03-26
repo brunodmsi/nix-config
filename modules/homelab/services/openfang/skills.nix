@@ -875,6 +875,23 @@ let
         return "\n".join(lines)
 
 
+    def nextcloud_note_get(inp):
+        note_id = inp.get("id", "")
+        if not note_id:
+            return "Error: note ID is required"
+        data = nc_request(f"/index.php/apps/notes/api/v1/notes/{note_id}")
+        if isinstance(data, dict) and data.get("error"):
+            return data["error"]
+        if not isinstance(data, dict):
+            return f"Unexpected response: {str(data)[:200]}"
+        title = data.get("title", "Untitled")
+        content = data.get("content", "")
+        modified = data.get("modified", "")
+        if isinstance(modified, int):
+            modified = datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M")
+        return f"Title: {title}\nID: {note_id}\nModified: {modified}\n---\n{content}"
+
+
     def nextcloud_note_add(inp):
         title = inp.get("title", "")
         content = inp.get("content", "").replace("\\n", "\n")
@@ -1070,6 +1087,7 @@ END:VCALENDAR"""
 
     TOOLS = {
         "nextcloud_notes": nextcloud_notes,
+        "nextcloud_note_get": nextcloud_note_get,
         "nextcloud_note_add": nextcloud_note_add,
         "nextcloud_note_update": nextcloud_note_update,
         "nextcloud_calendar": nextcloud_calendar,
@@ -1300,6 +1318,9 @@ END:VCALENDAR"""
       NC_JSON="$NC_JSON,\"nc_password\":\"$NC_PASS\""
     fi
     case "$CMD" in
+      note-get)
+        echo "{\"tool\":\"nextcloud_note_get\",\"input\":{\"id\":\"$ARG\"$NC_JSON}}" | python3 "$SKILL_PY"
+        ;;
       notes)
         if [ -n "$ARG" ]; then
           echo "{\"tool\":\"nextcloud_notes\",\"input\":{\"search\":\"$ARG\"$NC_JSON}}" | python3 "$SKILL_PY"
