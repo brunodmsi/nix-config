@@ -7,7 +7,8 @@ if "PATCHED_V10" in src:
     sys.exit(0)
 
 # Remove old patch markers
-src = src.replace("PATCHED_V7", "")
+for old_v in ["PATCHED_V7", "PATCHED_V8", "PATCHED_V9"]:
+    src = src.replace(old_v, "")
 
 # --- Patch 1: Add downloadMediaMessage to Baileys import ---
 # ESM style: import { makeWASocket, ... } from '@whiskeysockets/baileys'
@@ -39,11 +40,11 @@ for i, line in enumerate(lines):
         break
 src = '\n'.join(lines)
 
-# --- Patch 4: Add remote_jid to metadata ---
+# --- Patch 4: Add remote_jid and message_id to metadata ---
 if "remote_jid: remoteJid," not in src:
     src = src.replace(
         "sender_name: pushName,",
-        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V10"
+        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V10\n        message_id: msg.key.id,  // PATCHED_V10: for reply quoting"
     )
 
 # --- Patch 5: Add media download + media fields in metadata ---
@@ -140,23 +141,40 @@ src = '\n'.join(lines)
 # The router sends replies here instead of relying on the synchronous response.
 # We add a small HTTP server alongside the Baileys socket.
 
+# Import for HTTP send server (add to top with other imports)
+import_line = "import { createServer as createHttpSendServer } from 'node:http'; // PATCHED_V10"
+if "createHttpSendServer" not in src:
+    lines = src.split('\n')
+    last_import = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith('import ') and 'from ' in line:
+            last_import = i
+    if last_import > 0:
+        lines.insert(last_import + 1, import_line)
+        src = '\n'.join(lines)
+        print(f"[patch] Added createHttpSendServer import after line {last_import + 1}")
+
+# Send endpoint server (append to end of file — sock is already initialized)
 send_endpoint_block = '''
 // PATCHED_V10: HTTP send endpoint for async replies from router
-import { createServer as createHttpServer } from 'node:http';
 const SEND_PORT = parseInt(process.env.WHATSAPP_SEND_PORT || '3010');
-const sendServer = createHttpServer((req, res) => {
+const sendServer = createHttpSendServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/send') {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { jid, text } = JSON.parse(body);
+        const { jid, text, quotedId } = JSON.parse(body);
         if (!jid || !text) {
           res.writeHead(400);
           res.end(JSON.stringify({ error: 'jid and text required' }));
           return;
         }
-        await sock.sendMessage(jid, { text });
+        const msgOptions = { text };
+        if (quotedId) {
+          msgOptions.quoted = { key: { remoteJid: jid, id: quotedId } };
+        }
+        await sock.sendMessage(jid, msgOptions);
         console.log('[gateway] Sent async reply to ' + jid.split('@')[0]);
         res.writeHead(200);
         res.end(JSON.stringify({ ok: true }));
@@ -177,18 +195,8 @@ sendServer.listen(SEND_PORT, '127.0.0.1', () => {
 '''
 
 if "PATCHED_V10: HTTP send endpoint" not in src:
-    # Inject after the last import statement
-    lines = src.split('\n')
-    last_import = 0
-    for i, line in enumerate(lines):
-        if line.strip().startswith('import ') or line.strip().startswith('const {'):
-            if 'from ' in line:
-                last_import = i
-    if last_import > 0:
-        # Remove the createServer import from the block since we'll use a different name
-        lines.insert(last_import + 1, send_endpoint_block)
-        src = '\n'.join(lines)
-        print(f"[patch] Injected send endpoint after line {last_import + 1}")
+    src = src.rstrip() + '\n' + send_endpoint_block
+    print("[patch] Appended send endpoint to end of file")
 
 # --- Patch 8: Suppress reply when router returns {"status":"accepted"} ---
 # The gateway normally sends the response text as a WhatsApp reply.

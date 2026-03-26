@@ -177,9 +177,9 @@ function getAgentForSender(sender, displayName, remoteJid) {
 
 // --- Async reply via gateway ---
 
-function sendReplyViaGateway(jid, text) {
+function sendReplyViaGateway(jid, text, quotedId) {
   return new Promise((resolve) => {
-    const payload = JSON.stringify({ jid, text });
+    const payload = JSON.stringify({ jid, text, quotedId: quotedId || undefined });
     const url = new URL(GATEWAY_URL + '/api/send');
     const req = http.request({
       hostname: url.hostname,
@@ -267,6 +267,7 @@ async function handleSenderMessage({ req, res, body, parsed }) {
   const sender = parsed.metadata?.sender;
   const displayName = parsed.metadata?.sender_name;
   const remoteJid = parsed.metadata?.remote_jid;
+  const messageId = parsed.metadata?.message_id;
   let messageContent = parsed.content || parsed.message || '';
 
   // --- Media processing ---
@@ -335,7 +336,7 @@ async function handleSenderMessage({ req, res, body, parsed }) {
 
     // Send reply to WhatsApp via gateway
     if (replyText && remoteJid) {
-      const sent = await sendReplyViaGateway(remoteJid, replyText);
+      const sent = await sendReplyViaGateway(remoteJid, replyText, messageId);
       if (sent) {
         console.log('[router] Reply sent to ' + sender + ' via gateway');
       } else {
