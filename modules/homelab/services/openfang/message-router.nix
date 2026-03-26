@@ -79,6 +79,7 @@ in
         OPENFANG_CONFIG = "${cfg.configDir}/.openfang/config.toml";
         MANIFEST_PATH = "/etc/openfang/agent-manifest.toml";
         ALLOWED_SENDERS_FILE = cfg.allowedSendersFile;
+        GATEWAY_URL = "http://127.0.0.1:3010";
         PAPERLESS_API_URL = paperlessApiUrl;
         FFMPEG_PATH = "${pkgs.ffmpeg-headless}/bin/ffmpeg";
         MEDIA_TMP_DIR = "/tmp/openfang-media";

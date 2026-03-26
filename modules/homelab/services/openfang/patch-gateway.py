@@ -2,7 +2,7 @@ import sys, pathlib
 
 f = pathlib.Path(sys.argv[1])
 src = f.read_text()
-if "PATCHED_V9" in src:
+if "PATCHED_V10" in src:
     print("[patch] Already patched (V8)")
     sys.exit(0)
 
@@ -23,7 +23,7 @@ src = '\n'.join(lines)
 lines = src.split('\n')
 for i, line in enumerate(lines):
     if 'const replyJid' in line and 's.whatsapp.net' in line:
-        lines[i] = '          const replyJid = remoteJid; // PATCHED_V9: reply to remoteJid directly'
+        lines[i] = '          const replyJid = remoteJid; // PATCHED_V10: reply to remoteJid directly'
         break
 src = '\n'.join(lines)
 
@@ -32,7 +32,7 @@ lines = src.split('\n')
 for i, line in enumerate(lines):
     if "const phone = '+' + senderJid" in line:
         lines[i] = (
-            "      // PATCHED_V9: use senderPn (real phone) when available\n"
+            "      // PATCHED_V10: use senderPn (real phone) when available\n"
             "      const senderPn = msg.key.senderPn ? msg.key.senderPn.replace(/@.*$/, '') : null;\n"
             "      const phone = '+' + (senderPn || senderJid.replace(/@.*$/, ''));"
         )
@@ -43,7 +43,7 @@ src = '\n'.join(lines)
 if "remote_jid: remoteJid," not in src:
     src = src.replace(
         "sender_name: pushName,",
-        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V9"
+        "sender_name: pushName,\n        remote_jid: remoteJid,  // PATCHED_V10"
     )
 
 # --- Patch 5: Add media download + media fields in metadata ---
@@ -53,7 +53,7 @@ if "remote_jid: remoteJid," not in src:
 # We inject media download after phone extraction and before the payload is built.
 
 media_download_block = '''
-      // PATCHED_V9: Download media if present
+      // PATCHED_V10: Download media if present
       let media_type = null;
       let media_base64 = null;
       let media_mimetype = null;
@@ -87,7 +87,7 @@ media_download_block = '''
       }
 '''
 
-if "PATCHED_V9: Download media" not in src:
+if "PATCHED_V10: Download media" not in src:
     # Find the phone extraction line and inject after it
     lines = src.split('\n')
     inject_after = None
@@ -104,8 +104,8 @@ if "PATCHED_V9: Download media" not in src:
 # Add media fields to the metadata payload
 if "media_type: media_type," not in src:
     src = src.replace(
-        "remote_jid: remoteJid,  // PATCHED_V9",
-        "remote_jid: remoteJid,  // PATCHED_V9\n"
+        "remote_jid: remoteJid,  // PATCHED_V10",
+        "remote_jid: remoteJid,  // PATCHED_V10\n"
         "        media_type: media_type,\n"
         "        media_base64: media_base64,\n"
         "        media_mimetype: media_mimetype,\n"
@@ -131,10 +131,84 @@ for i, line in enumerate(lines):
                 field_name = line[:colon_idx].strip()
                 value_part = line[colon_idx+1:].strip().rstrip(',')
                 indent = line[:len(line) - len(line.lstrip())]
-                lines[i] = f"{indent}{field_name}: (typeof captionText !== 'undefined' && captionText) || {value_part},  // PATCHED_V9: caption fallback"
+                lines[i] = f"{indent}{field_name}: (typeof captionText !== 'undefined' && captionText) || {value_part},  // PATCHED_V10: caption fallback"
                 print(f"[patch] Added caption fallback to {field_name} field (line {i+1})")
                 break
 src = '\n'.join(lines)
 
+# --- Patch 7: Add /api/send HTTP endpoint for async replies ---
+# The router sends replies here instead of relying on the synchronous response.
+# We add a small HTTP server alongside the Baileys socket.
+
+send_endpoint_block = '''
+// PATCHED_V10: HTTP send endpoint for async replies from router
+import { createServer as createHttpServer } from 'node:http';
+const SEND_PORT = parseInt(process.env.WHATSAPP_SEND_PORT || '3010');
+const sendServer = createHttpServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/api/send') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { jid, text } = JSON.parse(body);
+        if (!jid || !text) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'jid and text required' }));
+          return;
+        }
+        await sock.sendMessage(jid, { text });
+        console.log('[gateway] Sent async reply to ' + jid.split('@')[0]);
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        console.error('[gateway] Send endpoint error:', e.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+  } else {
+    res.writeHead(404);
+    res.end('Not found');
+  }
+});
+sendServer.listen(SEND_PORT, '127.0.0.1', () => {
+  console.log('[gateway] Send endpoint listening on http://127.0.0.1:' + SEND_PORT + '/api/send');
+});
+'''
+
+if "PATCHED_V10: HTTP send endpoint" not in src:
+    # Inject after the last import statement
+    lines = src.split('\n')
+    last_import = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith('import ') or line.strip().startswith('const {'):
+            if 'from ' in line:
+                last_import = i
+    if last_import > 0:
+        # Remove the createServer import from the block since we'll use a different name
+        lines.insert(last_import + 1, send_endpoint_block)
+        src = '\n'.join(lines)
+        print(f"[patch] Injected send endpoint after line {last_import + 1}")
+
+# --- Patch 8: Suppress reply when router returns {"status":"accepted"} ---
+# The gateway normally sends the response text as a WhatsApp reply.
+# With async routing, the response is {"status":"accepted"} — skip the reply.
+if 'PATCHED_V10: skip accepted' not in src:
+    # Find the sendMessage reply line and wrap it with a check
+    lines = src.split('\n')
+    for i, line in enumerate(lines):
+        if 'sendMessage' in line and 'replyJid' in line and 'PATCHED' not in line:
+            indent = line[:len(line) - len(line.lstrip())]
+            # Wrap with check: skip if response is {"status":"accepted"}
+            lines[i] = (
+                f'{indent}// PATCHED_V10: skip accepted (async reply handled by router)\n'
+                f'{indent}if (typeof responseText !== "undefined" && responseText && !responseText.includes(\'"status":"accepted"\')) {{\n'
+                f'{line}\n'
+                f'{indent}}}'
+            )
+            print(f"[patch] Wrapped sendMessage with accepted-check (line {i+1})")
+            break
+    src = '\n'.join(lines)
+
 f.write_text(src)
-print("[patch] Gateway patched (V8: media download + senderPn + remoteJid + caption)")
+print("[patch] Gateway patched (V9: media download + senderPn + remoteJid + caption + async send)")

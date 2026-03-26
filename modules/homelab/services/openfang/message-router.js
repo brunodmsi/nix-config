@@ -6,6 +6,7 @@ import { processMedia } from './media-handler.js';
 
 const ROUTER_PORT = parseInt(process.env.ROUTER_PORT || '50052');
 const OPENFANG_API = (process.env.OPENFANG_API || 'http://127.0.0.1:50051').replace(/\/+$/, '');
+const GATEWAY_URL = (process.env.GATEWAY_URL || 'http://127.0.0.1:3010').replace(/\/+$/, '');
 const DB_URL = process.env.DB_URL || 'postgresql://openfang@127.0.0.1:5432/openfang';
 const MANIFEST_PATH = process.env.MANIFEST_PATH || '/etc/openfang/agent-manifest.toml';
 const OPENFANG_BIN = process.env.OPENFANG_BIN || '/persist/openfang/.openfang/bin/openfang';
@@ -45,10 +46,6 @@ async function processQueue(sender) {
     await handleSenderMessage(item);
   } catch (e) {
     console.error('[router] queue processing error for ' + sender + ':', e.message);
-    try {
-      item.res.writeHead(500);
-      item.res.end(JSON.stringify({ error: 'Router error: ' + e.message }));
-    } catch {}
   }
   // Process next message in queue
   processQueue(sender);
@@ -178,7 +175,83 @@ function getAgentForSender(sender, displayName, remoteJid) {
   return agentId;
 }
 
-// --- Proxy ---
+// --- Async reply via gateway ---
+
+function sendReplyViaGateway(jid, text) {
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({ jid, text });
+    const url = new URL(GATEWAY_URL + '/api/send');
+    const req = http.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      timeout: 10000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(true);
+        } else {
+          console.error('[router] Gateway send failed: ' + res.statusCode + ' ' + data);
+          resolve(false);
+        }
+      });
+    });
+    req.on('error', (e) => {
+      console.error('[router] Gateway send error:', e.message);
+      resolve(false);
+    });
+    req.write(payload);
+    req.end();
+  });
+}
+
+// Fire-and-forget proxy to OpenFang that captures the response
+function proxyToOpenfang(targetUrl, body, headers) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(targetUrl);
+    const proxyReq = http.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: { ...headers, host: url.host, 'content-length': Buffer.byteLength(body || '') },
+      timeout: 300000, // 5 min — LLM can be slow
+    }, (proxyRes) => {
+      const chunks = [];
+      proxyRes.on('data', chunk => chunks.push(chunk));
+      proxyRes.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    });
+    proxyReq.on('error', reject);
+    proxyReq.on('timeout', () => { proxyReq.destroy(); reject(new Error('OpenFang timeout')); });
+    if (body) proxyReq.write(body);
+    proxyReq.end();
+  });
+}
+
+// Legacy sync proxy for non-message routes (dashboard, API calls)
+function proxyRequest(req, res, targetUrl, body) {
+  const url = new URL(targetUrl);
+  const proxyReq = http.request({
+    hostname: url.hostname,
+    port: url.port,
+    path: url.pathname + url.search,
+    method: req.method,
+    headers: { ...req.headers, host: url.host, 'content-length': Buffer.byteLength(body || '') },
+    timeout: 180000,
+  }, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('error', (e) => {
+    try { res.writeHead(502); res.end(JSON.stringify({ error: e.message })); } catch {}
+  });
+  if (body) proxyReq.write(body);
+  proxyReq.end();
+}
 
 function readBody(req) {
   return new Promise((resolve) => {
@@ -186,53 +259,6 @@ function readBody(req) {
     req.on('data', (chunk) => data += chunk);
     req.on('end', () => resolve(data));
   });
-}
-
-// Async proxy that optionally captures the response body for logging
-function proxyRequestAsync(req, res, targetUrl, body, captureResponse) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(targetUrl);
-    const proxyReq = http.request({
-      hostname: url.hostname,
-      port: url.port,
-      path: url.pathname + url.search,
-      method: req.method,
-      headers: { ...req.headers, host: url.host, 'content-length': Buffer.byteLength(body || '') },
-      timeout: 180000,
-    }, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-
-      if (captureResponse) {
-        const chunks = [];
-        proxyRes.on('data', chunk => {
-          chunks.push(chunk);
-          res.write(chunk);
-        });
-        proxyRes.on('end', () => {
-          res.end();
-          resolve(Buffer.concat(chunks).toString());
-        });
-      } else {
-        proxyRes.pipe(res);
-        proxyRes.on('end', () => resolve(''));
-      }
-    });
-    proxyReq.on('error', (e) => {
-      console.error('[router] proxy error:', e.message);
-      try {
-        res.writeHead(502);
-        res.end(JSON.stringify({ error: 'Router proxy error: ' + e.message }));
-      } catch {}
-      reject(e);
-    });
-    if (body) proxyReq.write(body);
-    proxyReq.end();
-  });
-}
-
-// Legacy sync proxy for non-message routes
-function proxyRequest(req, res, targetUrl, body) {
-  proxyRequestAsync(req, res, targetUrl, body, false).catch(() => {});
 }
 
 // --- Message handler (called from queue, one at a time per sender) ---
@@ -252,22 +278,15 @@ async function handleSenderMessage({ req, res, body, parsed }) {
   }
 
   if (mediaResult) {
-    // Use transcription as the message content if available
     if (mediaResult.contentOverride) {
       messageContent = mediaResult.contentOverride;
     }
-
-    // Prepend system context about the media
     if (mediaResult.contentPrefix) {
       messageContent = mediaResult.contentPrefix + '\n\n' + (messageContent || '');
     }
-
-    // Strip base64 media data from payload before forwarding to OpenFang
     if (mediaResult.stripMedia) {
       delete parsed.metadata.media_base64;
     }
-
-    // Update the parsed payload with enriched content
     parsed.content = messageContent;
     parsed.message = messageContent;
     body = JSON.stringify(parsed);
@@ -276,12 +295,13 @@ async function handleSenderMessage({ req, res, body, parsed }) {
   const agentId = getAgentForSender(sender, displayName, remoteJid);
   if (!agentId) {
     console.error('[router] Failed to get agent for sender:', sender);
-    res.writeHead(500);
-    res.end(JSON.stringify({ error: 'Failed to create agent for sender' }));
+    // Respond to gateway immediately — no reply to send
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: 'error', error: 'Failed to create agent' }));
     return;
   }
 
-  // Log incoming message (without base64 data)
+  // Log incoming message
   logConversation(sender, 'in', messageContent, {
     sender_name: displayName,
     agent_id: agentId,
@@ -291,23 +311,45 @@ async function handleSenderMessage({ req, res, body, parsed }) {
   const targetUrl = OPENFANG_API + '/api/agents/' + agentId + '/message';
   console.log('[router] ' + sender + ' -> agent ' + agentId + (parsed.metadata?.media_type ? ' [' + parsed.metadata.media_type + ']' : ''));
 
-  // Proxy and capture response for logging
-  try {
-    const responseBody = await proxyRequestAsync(req, res, targetUrl, body, true);
+  // Respond to gateway IMMEDIATELY — no timeout possible
+  res.writeHead(200);
+  res.end(JSON.stringify({ status: 'accepted' }));
 
-    // Log outgoing response (best effort)
+  // Proxy to OpenFang async — gateway is already free
+  try {
+    const responseBody = await proxyToOpenfang(targetUrl, body, req.headers);
+
+    // Extract reply text
+    let replyText = '';
     if (responseBody) {
       try {
         const respParsed = JSON.parse(responseBody);
-        logConversation(sender, 'out', respParsed.response || respParsed.content || responseBody, {
-          agent_id: agentId,
-        });
+        replyText = respParsed.response || respParsed.content || responseBody;
       } catch {
-        logConversation(sender, 'out', responseBody, { agent_id: agentId });
+        replyText = responseBody;
+      }
+    }
+
+    // Log outgoing response
+    logConversation(sender, 'out', replyText, { agent_id: agentId });
+
+    // Send reply to WhatsApp via gateway
+    if (replyText && remoteJid) {
+      const sent = await sendReplyViaGateway(remoteJid, replyText);
+      if (sent) {
+        console.log('[router] Reply sent to ' + sender + ' via gateway');
+      } else {
+        console.error('[router] Failed to send reply to ' + sender);
       }
     }
   } catch (e) {
+    console.error('[router] OpenFang proxy error for ' + sender + ':', e.message);
     logConversation(sender, 'out', 'ERROR: ' + e.message, { agent_id: agentId });
+
+    // Notify user of error via gateway
+    if (remoteJid) {
+      await sendReplyViaGateway(remoteJid, 'Desculpa, tive um erro processando sua mensagem. Tenta de novo?');
+    }
   }
 }
 
@@ -334,7 +376,7 @@ const server = http.createServer(async (req, res) => {
 
   const sender = parsed.metadata?.sender;
   if (!sender) {
-    // No sender metadata (e.g., dashboard chat) — pass through
+    // No sender metadata (e.g., dashboard chat) — pass through synchronously
     proxyRequest(req, res, OPENFANG_API + req.url, body);
     return;
   }
@@ -354,4 +396,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(ROUTER_PORT, '127.0.0.1', () => {
   console.log('[router] Message router listening on http://127.0.0.1:' + ROUTER_PORT);
   console.log('[router] Proxying to OpenFang at ' + OPENFANG_API);
+  console.log('[router] Replies via gateway at ' + GATEWAY_URL);
 });
