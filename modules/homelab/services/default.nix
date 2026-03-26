@@ -102,5 +102,6 @@ in
     ./uptime-kuma
     ./vaultwarden
     ./wireguard-netns
+    ./coding-agents
   ];
 }

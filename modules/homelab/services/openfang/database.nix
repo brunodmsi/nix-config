@@ -53,6 +53,17 @@ in
             config JSONB NOT NULL DEFAULT '{}',
             UNIQUE(channel_user_id, service)
           );" "$DB"
+
+          # Conversation log — persists message history across agent restarts
+          ${pkgs.postgresql}/bin/psql -c "CREATE TABLE IF NOT EXISTS conversation_log (
+            id SERIAL PRIMARY KEY,
+            channel_user_id TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            content TEXT NOT NULL,
+            metadata JSONB DEFAULT '{}',
+            created_at TIMESTAMP DEFAULT NOW()
+          );" "$DB"
+          ${pkgs.postgresql}/bin/psql -c "CREATE INDEX IF NOT EXISTS idx_convo_user ON conversation_log(channel_user_id, created_at DESC);" "$DB"
         '';
       };
     };

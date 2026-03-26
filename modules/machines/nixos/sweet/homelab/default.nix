@@ -177,6 +177,30 @@
 
           Delete request:
           - User asks to cancel → run status to find the request ID → confirm with user → run delete
+
+          ## Coding Agents
+          You can spawn autonomous coding agents that implement features, self-review their work, create PRs, and start live previews.
+
+          SPAWN AGENT: shell_exec {"command": "/persist/coding-agents/scripts/coding-agent-run.sh --repo OWNER/REPO --task \"description\" --branch main"}
+          Returns a task ID immediately. The agent works in the background. Always confirm repo and task with the user before spawning.
+
+          MANAGE TASKS: shell_exec {"command": "/persist/coding-agents/scripts/coding-tasks.sh COMMAND [ARGS]"}
+          Commands:
+          • list [--status running|done|failed|all] — list tasks
+          • status TASK_ID — full task details (score, PR, preview)
+          • logs TASK_ID [--tail 50] — agent output logs
+          • cancel TASK_ID — stop a running agent
+          • pr-info TASK_ID — PR details (reviews, checks, merge status)
+          • preview TASK_ID — live preview URL and status
+          • ports — all running dev server previews
+          • stop-preview TASK_ID — kill a preview server
+
+          MANAGE REPOS: shell_exec {"command": "/persist/coding-agents/scripts/coding-workspace.sh COMMAND [ARGS]"}
+          Commands: clone OWNER/REPO, list, update [OWNER/REPO], remove OWNER/REPO
+
+          When the user mentions a PR, task, or coding work — always query coding-tasks.sh first for context before responding.
+          When a task completes, a live preview URL may be available. Share it with the user.
+          You have FULL ACCESS to agent status, logs, and PR details — never tell the user you can't check.
         '';
         skills = [ "ping-test" "homelab-server" "homelab-media" "homelab-paperless" "homelab-nextcloud" ];
         llmProvider = "anthropic";
@@ -213,6 +237,16 @@
           enable = true;
           geminiApiKeyFile = config.age.secrets.geminiApiKey.path;
         };
+      };
+      # Coding Agents
+      coding-agents = {
+        enable = true;
+        githubTokenFile = config.age.secrets.githubToken.path;
+        model = "sonnet";
+        scoreThreshold = 7;
+        maxIterations = 3;
+        maxTurns = 50;
+        maxConcurrent = 2;
       };
       # Monitoring
       prometheus.enable = true;

@@ -12,6 +12,49 @@ const OPENFANG_CONFIG = process.env.OPENFANG_CONFIG || '/persist/openfang/.openf
 const HOME_DIR = process.env.HOME || '/persist/openfang';
 const ALLOWED_SENDERS_FILE = process.env.ALLOWED_SENDERS_FILE || '';
 
+// --- Per-sender message queue ---
+// Serializes message processing per sender to prevent race conditions
+// when multiple messages arrive while an agent is still processing.
+const senderQueues = new Map();
+
+function enqueueMessage(sender, item) {
+  if (!senderQueues.has(sender)) {
+    senderQueues.set(sender, { processing: false, queue: [] });
+  }
+  const sq = senderQueues.get(sender);
+  sq.queue.push(item);
+  if (!sq.processing) {
+    processQueue(sender);
+  }
+}
+
+async function processQueue(sender) {
+  const sq = senderQueues.get(sender);
+  if (!sq || sq.queue.length === 0) {
+    if (sq) sq.processing = false;
+    return;
+  }
+  sq.processing = true;
+  const item = sq.queue.shift();
+  const queueDepth = sq.queue.length;
+  if (queueDepth > 0) {
+    console.log('[router] ' + sender + ' queue depth: ' + queueDepth + ' waiting');
+  }
+  try {
+    await handleSenderMessage(item);
+  } catch (e) {
+    console.error('[router] queue processing error for ' + sender + ':', e.message);
+    try {
+      item.res.writeHead(500);
+      item.res.end(JSON.stringify({ error: 'Router error: ' + e.message }));
+    } catch {}
+  }
+  // Process next message in queue
+  processQueue(sender);
+}
+
+// --- Helpers ---
+
 function loadAllowedSenders() {
   if (!ALLOWED_SENDERS_FILE) return null; // no file = allow all
   try {
@@ -28,7 +71,6 @@ function loadAllowedSenders() {
 function isSenderAllowed(sender) {
   const allowed = loadAllowedSenders();
   if (!allowed) return true; // no file = allow all
-  // Check if sender phone (e.g. +559184519877) contains any allowed number
   const stripped = sender.replace(/\+/g, '');
   return allowed.some(num => stripped.includes(num.replace(/\+/g, '')));
 }
@@ -49,9 +91,26 @@ function sqlEscape(str) {
   return (str || '').replace(/'/g, "''");
 }
 
+// --- Conversation logging ---
+
+function logConversation(channelUserId, direction, content, metadata) {
+  try {
+    const safeId = sqlEscape(channelUserId);
+    const safeContent = sqlEscape(typeof content === 'string' ? content : JSON.stringify(content));
+    const safeMeta = sqlEscape(JSON.stringify(metadata || {}));
+    psql(
+      "INSERT INTO conversation_log (channel_user_id, direction, content, metadata) " +
+      "VALUES ('" + safeId + "', '" + direction + "', '" + safeContent + "', '" + safeMeta + "'::jsonb)"
+    );
+  } catch (e) {
+    console.error('[router] conversation log error:', e.message);
+  }
+}
+
+// --- Agent management ---
+
 function spawnAgent(senderPhone) {
   try {
-    // Create a per-sender manifest with unique name
     const manifest = fs.readFileSync(MANIFEST_PATH, 'utf8');
     const stripped = senderPhone.replace(/[^0-9]/g, '');
     const uniqueName = 'fluzy-' + stripped;
@@ -78,6 +137,7 @@ function spawnAgent(senderPhone) {
   }
 }
 
+// Safe because message queue serializes per-sender — no concurrent calls for same sender
 function getAgentForSender(sender, displayName, remoteJid) {
   const safeSender = sqlEscape(sender);
   const safeDisplay = sqlEscape(displayName || 'Unknown');
@@ -113,6 +173,8 @@ function getAgentForSender(sender, displayName, remoteJid) {
   return agentId;
 }
 
+// --- Proxy ---
+
 function readBody(req) {
   return new Promise((resolve) => {
     let data = '';
@@ -121,27 +183,99 @@ function readBody(req) {
   });
 }
 
-function proxyRequest(req, res, targetUrl, body) {
-  const url = new URL(targetUrl);
-  const proxyReq = http.request({
-    hostname: url.hostname,
-    port: url.port,
-    path: url.pathname + url.search,
-    method: req.method,
-    headers: { ...req.headers, host: url.host, 'content-length': Buffer.byteLength(body || '') },
-    timeout: 180000,
-  }, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    proxyRes.pipe(res);
+// Async proxy that optionally captures the response body for logging
+function proxyRequestAsync(req, res, targetUrl, body, captureResponse) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(targetUrl);
+    const proxyReq = http.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname + url.search,
+      method: req.method,
+      headers: { ...req.headers, host: url.host, 'content-length': Buffer.byteLength(body || '') },
+      timeout: 180000,
+    }, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+
+      if (captureResponse) {
+        const chunks = [];
+        proxyRes.on('data', chunk => {
+          chunks.push(chunk);
+          res.write(chunk);
+        });
+        proxyRes.on('end', () => {
+          res.end();
+          resolve(Buffer.concat(chunks).toString());
+        });
+      } else {
+        proxyRes.pipe(res);
+        proxyRes.on('end', () => resolve(''));
+      }
+    });
+    proxyReq.on('error', (e) => {
+      console.error('[router] proxy error:', e.message);
+      try {
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: 'Router proxy error: ' + e.message }));
+      } catch {}
+      reject(e);
+    });
+    if (body) proxyReq.write(body);
+    proxyReq.end();
   });
-  proxyReq.on('error', (e) => {
-    console.error('[router] proxy error:', e.message);
-    res.writeHead(502);
-    res.end(JSON.stringify({ error: 'Router proxy error: ' + e.message }));
-  });
-  if (body) proxyReq.write(body);
-  proxyReq.end();
 }
+
+// Legacy sync proxy for non-message routes
+function proxyRequest(req, res, targetUrl, body) {
+  proxyRequestAsync(req, res, targetUrl, body, false).catch(() => {});
+}
+
+// --- Message handler (called from queue, one at a time per sender) ---
+
+async function handleSenderMessage({ req, res, body, parsed }) {
+  const sender = parsed.metadata?.sender;
+  const displayName = parsed.metadata?.sender_name;
+  const remoteJid = parsed.metadata?.remote_jid;
+  const messageContent = parsed.content || parsed.message || '';
+
+  const agentId = getAgentForSender(sender, displayName, remoteJid);
+  if (!agentId) {
+    console.error('[router] Failed to get agent for sender:', sender);
+    res.writeHead(500);
+    res.end(JSON.stringify({ error: 'Failed to create agent for sender' }));
+    return;
+  }
+
+  // Log incoming message
+  logConversation(sender, 'in', messageContent, {
+    sender_name: displayName,
+    agent_id: agentId,
+  });
+
+  const targetUrl = OPENFANG_API + '/api/agents/' + agentId + '/message';
+  console.log('[router] ' + sender + ' -> agent ' + agentId);
+
+  // Proxy and capture response for logging
+  try {
+    const responseBody = await proxyRequestAsync(req, res, targetUrl, body, true);
+
+    // Log outgoing response (best effort)
+    if (responseBody) {
+      try {
+        const respParsed = JSON.parse(responseBody);
+        logConversation(sender, 'out', respParsed.response || respParsed.content || responseBody, {
+          agent_id: agentId,
+        });
+      } catch {
+        logConversation(sender, 'out', responseBody, { agent_id: agentId });
+      }
+    }
+  } catch (e) {
+    logConversation(sender, 'out', 'ERROR: ' + e.message, { agent_id: agentId });
+  }
+}
+
+// --- Server ---
 
 const server = http.createServer(async (req, res) => {
   // Only intercept POST /api/agents/*/message
@@ -177,20 +311,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const displayName = parsed.metadata?.sender_name;
-  const remoteJid = parsed.metadata?.remote_jid;
-
-  const agentId = getAgentForSender(sender, displayName, remoteJid);
-  if (!agentId) {
-    console.error('[router] Failed to get agent for sender:', sender);
-    res.writeHead(500);
-    res.end(JSON.stringify({ error: 'Failed to create agent for sender' }));
-    return;
-  }
-
-  const targetUrl = OPENFANG_API + '/api/agents/' + agentId + '/message';
-  console.log('[router] ' + sender + ' -> agent ' + agentId);
-  proxyRequest(req, res, targetUrl, body);
+  // Enqueue — processed one at a time per sender
+  enqueueMessage(sender, { req, res, body, parsed });
 });
 
 server.listen(ROUTER_PORT, '127.0.0.1', () => {
