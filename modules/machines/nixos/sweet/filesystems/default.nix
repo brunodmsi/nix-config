@@ -31,12 +31,12 @@ in
   fileSystems."/mnt/data1" = {
     device = "/dev/disk/by-label/Data1";
     fsType = "xfs";
-    options = [ "nofail" ];
+    options = [ "nofail" "nosuid" "nodev" "noexec" ];
   };
 
   fileSystems."/mnt/parity1" = {
     device = "/dev/disk/by-label/Parity1";
     fsType = "xfs";
-    options = [ "nofail" ];
+    options = [ "nofail" "nosuid" "nodev" "noexec" ];
   };
 }

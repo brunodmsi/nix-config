@@ -707,6 +707,15 @@ in
         ExecStart = "${workerScript} %i";
         StandardOutput = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
         StandardError = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
+        # Hardening
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectHome = true;
+        ProtectSystem = "full";
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictSUIDSGID = true;
       };
     };
 

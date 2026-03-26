@@ -344,6 +344,15 @@ in
         Restart = "on-failure";
         RestartSec = 10;
         WorkingDirectory = cfg.dataDir;
+        # Hardening
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectHome = true;
+        ProtectSystem = "full";
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictSUIDSGID = true;
       };
     };
 
@@ -404,7 +413,18 @@ in
         ExecStartPre = pkgs.writeShellScript "openfang-wa-gateway-install" ''
           export PATH=${pkgs.git}/bin:${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:$PATH
           GATEWAY_DIR="${cfg.dataDir}/whatsapp-gateway"
+
+          # Re-fetch gateway if missing or patch version changed
+          NEED_INSTALL=0
           if [ ! -f "$GATEWAY_DIR/index.js" ]; then
+            NEED_INSTALL=1
+          elif ! grep -q "PATCHED_V8" "$GATEWAY_DIR/index.js" 2>/dev/null; then
+            echo "[gateway] Patch version changed, re-fetching clean source..."
+            rm -rf "$GATEWAY_DIR"
+            NEED_INSTALL=1
+          fi
+
+          if [ "$NEED_INSTALL" = "1" ]; then
             mkdir -p "$GATEWAY_DIR"
             cd "$GATEWAY_DIR"
             ${pkgs.git}/bin/git clone --depth 1 https://github.com/RightNow-AI/openfang.git /tmp/openfang-repo
@@ -412,10 +432,11 @@ in
             cp -r /tmp/openfang-repo/packages/whatsapp-gateway/.* "$GATEWAY_DIR/" 2>/dev/null || true
             rm -rf /tmp/openfang-repo
           fi
+
           cd "$GATEWAY_DIR"
           ${pkgs.nodejs_22}/bin/npm install --omit=dev 2>&1
 
-          # Patch gateway: LID reply fix + remote_jid in metadata
+          # Patch gateway: media download + LID reply fix + remote_jid + senderPn
           ${pkgs.python3}/bin/python3 ${patchScript} "$GATEWAY_DIR/index.js"
         '';
         ExecStart = pkgs.writeShellScript "openfang-wa-gateway-run" ''
@@ -425,6 +446,15 @@ in
         '';
         Restart = "on-failure";
         RestartSec = 5;
+        # Hardening
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectHome = true;
+        ProtectSystem = "full";
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictSUIDSGID = true;
       };
     };
 
