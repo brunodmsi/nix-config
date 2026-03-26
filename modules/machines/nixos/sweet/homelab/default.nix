@@ -164,6 +164,7 @@
           - If unsure whether a note already exists, search first. If found, update it. If not, create new.
 
           CRITICAL: ALWAYS save ALL content in a SINGLE note. NEVER split into multiple notes.
+          Format notes with Markdown: use # for headings, - for bullet lists, **bold** for emphasis, and \n\n for paragraph breaks. Make the note well-structured and readable.
 
           ## Updates (Nix Config Dependency Watcher)
           shell_exec: /persist/openfang/scripts/update-tool.sh COMMAND
