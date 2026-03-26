@@ -419,7 +419,7 @@ in
           NEED_INSTALL=0
           if [ ! -f "$GATEWAY_DIR/index.js" ]; then
             NEED_INSTALL=1
-          elif ! grep -q "PATCHED_V8" "$GATEWAY_DIR/index.js" 2>/dev/null; then
+          elif ! grep -q "PATCHED_V9" "$GATEWAY_DIR/index.js" 2>/dev/null; then
             echo "[gateway] Patch version changed, re-fetching clean source..."
             rm -rf "$GATEWAY_DIR"
             NEED_INSTALL=1
