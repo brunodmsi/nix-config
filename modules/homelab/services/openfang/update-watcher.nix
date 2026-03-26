@@ -85,7 +85,8 @@ def check_input(name, node, last_check):
 
     owner = locked.get("owner", "")
     repo = locked.get("repo", "")
-    ref = locked.get("ref", locked.get("branch", "main"))
+    original = node.get("original", {})
+    ref = locked.get("ref", original.get("ref", locked.get("branch", "main")))
 
     if not owner or not repo:
         return None
