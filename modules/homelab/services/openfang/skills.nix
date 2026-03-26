@@ -1285,7 +1285,7 @@ END:VCALENDAR"""
         TITLE="''${ARGS[1]}"
         CONTENT="''${ARGS[*]:2}"
         # Use jq to safely build JSON (handles newlines, quotes, special chars)
-        ${pkgs.jq}/bin/jq -n \
+        ${pkgs.jq}/bin/jq -cn \
           --arg tool "nextcloud_note_add" \
           --arg title "$TITLE" \
           --arg content "$CONTENT" \
