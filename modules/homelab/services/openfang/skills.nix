@@ -343,7 +343,7 @@ let
         include_type = "Movie" if media_type == "movies" else "Series"
 
         data = jf_request(f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes={include_type}&IsPlayed=false&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit={limit}&Fields=Genres,RunTimeTicks")
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         items = data.get("Items", [])
@@ -374,7 +374,7 @@ let
             path += f"&Genres={urllib.parse.quote(genre)}"
 
         data = jf_request(path)
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         items = data.get("Items", [])
@@ -397,7 +397,7 @@ let
 
     def media_finished(inp):
         data = jf_request(f"/Items?UserId={get_user_id(inp)}&IncludeItemTypes=Series&IsPlayed=true&Recursive=true&Fields=Path&Limit=50")
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         items = data.get("Items", [])
@@ -589,7 +589,7 @@ let
             return "Error: query is required"
         encoded = urllib.parse.quote(query)
         data = pl_request(f"/documents/?query={encoded}&ordering=-created&page_size=10")
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         results = data.get("results", [])
@@ -606,7 +606,7 @@ let
     def paperless_recent(inp):
         limit = min(int(inp.get("limit", 5)), 20)
         data = pl_request(f"/documents/?ordering=-added&page_size={limit}")
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         results = data.get("results", [])
@@ -621,7 +621,7 @@ let
 
     def paperless_tags(inp):
         data = pl_request("/tags/?page_size=100")
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         tags = data.get("results", [])
@@ -641,7 +641,7 @@ let
         if not doc_id:
             return "Error: document id is required"
         data = pl_request(f"/documents/{doc_id}/")
-        if "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
 
         title = data.get("title", "Untitled")
@@ -856,7 +856,7 @@ let
         if search:
             path += f"?search={urllib.parse.quote(search)}"
         data = nc_request(path)
-        if isinstance(data, dict) and "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
         if not isinstance(data, list):
             return f"Unexpected response: {str(data)[:200]}"
@@ -885,7 +885,7 @@ let
             method="POST",
             data={"title": title, "content": content}
         )
-        if isinstance(data, dict) and "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
         note_id = data.get("id", "?") if isinstance(data, dict) else "?"
         return f"Note created: '{title}' (ID: {note_id})"
@@ -909,7 +909,7 @@ let
             method="PUT",
             data=update
         )
-        if isinstance(data, dict) and "error" in data:
+        if isinstance(data, dict) and data.get("error"):
             return data["error"]
         updated_title = data.get("title", "?") if isinstance(data, dict) else "?"
         return f"Note updated: '{updated_title}' (ID: {note_id})"
