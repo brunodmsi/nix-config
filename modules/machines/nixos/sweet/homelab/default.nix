@@ -196,7 +196,8 @@
           • stop-preview TASK_ID — kill a preview server
 
           MANAGE REPOS: shell_exec {"command": "/persist/coding-agents/scripts/coding-workspace.sh COMMAND [ARGS]"}
-          Commands: clone OWNER/REPO, list, update [OWNER/REPO], remove OWNER/REPO
+          Commands: clone OWNER/REPO, list, update [OWNER/REPO], config OWNER/REPO, remove OWNER/REPO
+          Each repo has a wt YAML config that defines services, ports, and setup steps. Use "config" to view it.
 
           When the user mentions a PR, task, or coding work — always query coding-tasks.sh first for context before responding.
           When a task completes, a live preview URL may be available. Share it with the user.

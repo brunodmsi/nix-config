@@ -1,4 +1,4 @@
-# Autonomous coding agents — Claude Code on git worktrees with self-review, PRs, and live previews
+# Autonomous coding agents — Claude Code on git worktrees managed by wt
 {
   config,
   lib,
@@ -11,14 +11,17 @@ let
   dbUrl = "postgresql://openfang@127.0.0.1:5432/openfang";
   waNotify = "/persist/openfang/scripts/wa-notify.sh";
   claudeBin = "${cfg.workspaceDir}/node_modules/.bin/claude";
+  wtBin = "${cfg.workspaceDir}/wt/wt.sh";
   promptFile = "/etc/coding-agents/agent-prompt.txt";
 
   # --- Scripts ---
 
   runScript = pkgs.writeShellScript "coding-agent-run" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.systemd}/bin:${pkgs.util-linux}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.systemd}/bin:${pkgs.util-linux}/bin:${pkgs.yq-go}/bin:${pkgs.tmux}/bin:$PATH
     DB="${dbUrl}"
     WORKSPACE="${cfg.workspaceDir}"
+    WT="${wtBin}"
+    export HOME="$WORKSPACE"
 
     usage() {
       echo "Usage: coding-agent-run --repo OWNER/REPO --task \"description\" [--branch BASE_BRANCH]"
@@ -56,26 +59,33 @@ let
       cd "$REPO_DIR"
       git config user.name "Coding Agent"
       git config user.email "agent@demasi.dev"
-      # Reset URL to not store token on disk
       git remote set-url origin "https://github.com/$REPO.git"
+
+      # Initialize wt config for this project
+      cd "$REPO_DIR"
+      $WT init 2>/dev/null || true
     fi
 
     # Fetch latest
     cd "$REPO_DIR"
     git fetch origin 2>/dev/null
 
-    # Create worktree
+    # Create worktree via wt
+    BRANCH="agent-$TASK_ID"
+    git checkout -B "$BRANCH" "origin/$BASE_BRANCH" 2>/dev/null
+    git checkout - 2>/dev/null
+    $WT create "$BRANCH" --no-attach --no-setup 2>&1 || true
+
+    # Resolve worktree path (wt puts them in .worktrees/)
+    WORKTREE_DIR="$REPO_DIR/.worktrees/$BRANCH"
+    if [ ! -d "$WORKTREE_DIR" ]; then
+      # Fallback: wt may normalize the path differently
+      WORKTREE_DIR=$(git worktree list --porcelain | grep -A0 "worktree.*$BRANCH" | head -1 | sed 's/worktree //')
+    fi
+
+    # Create task metadata directory
     TASK_DIR="$WORKSPACE/tasks/$TASK_ID"
-    WORKTREE_DIR="$TASK_DIR/worktree"
-    BRANCH="agent/$TASK_ID"
     mkdir -p "$TASK_DIR"
-
-    git worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BASE_BRANCH" 2>&1
-
-    # Allocate port block (${toString cfg.portsPerTask} ports per task: FE, BE, extra)
-    LAST_PORT=$(psql -t -A -c "SELECT COALESCE(MAX(preview_port), ${toString (cfg.previewBasePort - cfg.portsPerTask)}) FROM coding_tasks WHERE preview_port IS NOT NULL;" "$DB" 2>/dev/null)
-    [ -z "$LAST_PORT" ] && LAST_PORT=${toString (cfg.previewBasePort - cfg.portsPerTask)}
-    PORT_BASE=$((LAST_PORT + ${toString cfg.portsPerTask}))
 
     # Write task.json
     ${pkgs.jq}/bin/jq -n \
@@ -84,14 +94,13 @@ let
       --arg base "$BASE_BRANCH" \
       --arg branch "$BRANCH" \
       --arg task "$TASK" \
-      --argjson port "$PORT_BASE" \
-      --argjson ports_per_task ${toString cfg.portsPerTask} \
-      '{id: $id, repo: $repo, base_branch: $base, branch: $branch, task: $task, preview_port: $port, ports_per_task: $ports_per_task}' \
+      --arg worktree "$WORKTREE_DIR" \
+      '{id: $id, repo: $repo, base_branch: $base, branch: $branch, task: $task, worktree: $worktree}' \
       > "$TASK_DIR/task.json"
 
     # Insert DB record
     SAFE_TASK=$(echo "$TASK" | sed "s/'/''/g")
-    psql -c "INSERT INTO coding_tasks (id, repo, branch, base_branch, task_description, status, preview_port, log_file) VALUES ('$TASK_ID', '$REPO', '$BRANCH', '$BASE_BRANCH', '$SAFE_TASK', 'queued', $NEXT_PORT, '$TASK_DIR/agent.log');" "$DB"
+    psql -c "INSERT INTO coding_tasks (id, repo, branch, base_branch, task_description, status, log_file) VALUES ('$TASK_ID', '$REPO', '$BRANCH', '$BASE_BRANCH', '$SAFE_TASK', 'queued', '$TASK_DIR/agent.log');" "$DB"
 
     # Start background service
     systemctl start "coding-agent@$TASK_ID.service" 2>/dev/null &
@@ -100,13 +109,12 @@ let
     ${pkgs.jq}/bin/jq -n \
       --arg id "$TASK_ID" \
       --arg branch "$BRANCH" \
-      --arg port "$NEXT_PORT" \
-      '{task_id: $id, status: "queued", branch: $branch, preview_port: ($port | tonumber)}'
+      '{task_id: $id, status: "queued", branch: $branch}'
   '';
 
   workerScript = pkgs.writeShellScript "coding-agent-worker" ''
     set -euo pipefail
-    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.nodejs_22}/bin:${pkgs.gh}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:${pkgs.findutils}/bin:${pkgs.procps}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.nodejs_22}/bin:${pkgs.gh}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:${pkgs.findutils}/bin:${pkgs.procps}/bin:${pkgs.yq-go}/bin:${pkgs.tmux}/bin:$PATH
 
     TASK_ID="$1"
     WORKSPACE="${cfg.workspaceDir}"
@@ -114,6 +122,7 @@ let
     TASK_DIR="$WORKSPACE/tasks/$TASK_ID"
     CLAUDE="${claudeBin}"
     PROMPT_FILE="${promptFile}"
+    WT="${wtBin}"
 
     # Error handler
     on_error() {
@@ -131,11 +140,9 @@ let
     BRANCH=$(echo "$TASK_JSON" | jq -r '.branch')
     BASE_BRANCH=$(echo "$TASK_JSON" | jq -r '.base_branch')
     TASK_DESC=$(echo "$TASK_JSON" | jq -r '.task')
-    PREVIEW_PORT=$(echo "$TASK_JSON" | jq -r '.preview_port')
+    WORKTREE_DIR=$(echo "$TASK_JSON" | jq -r '.worktree')
 
-    WORKTREE_DIR="$TASK_DIR/worktree"
     REPO_DIR="$WORKSPACE/repos/$REPO"
-    PORTS_PER_TASK=$(echo "$TASK_JSON" | jq -r '.ports_per_task // 3')
 
     # Set up auth
     export GITHUB_TOKEN=$(cat ${cfg.githubTokenFile})
@@ -150,17 +157,11 @@ let
 
     echo "[agent] Task $TASK_ID: $TASK_DESC"
     echo "[agent] Repo: $REPO | Branch: $BRANCH | Base: $BASE_BRANCH"
-    echo "[agent] Port block: $PREVIEW_PORT - $((PREVIEW_PORT + PORTS_PER_TASK - 1))"
+    echo "[agent] Worktree: $WORKTREE_DIR"
     echo "[agent] Starting implementation..."
 
     # Phase 1: Implement
     IMPLEMENT_PROMPT="Your task: $TASK_DESC
-
-Port allocation for dev servers:
-- Frontend port: $PREVIEW_PORT
-- Backend port: $((PREVIEW_PORT + 1))
-- Extra port: $((PREVIEW_PORT + 2))
-Use these ports when configuring dev servers. The server is accessible on the LAN at http://sweet:PORT.
 
 After completing the implementation, write a file called .agent-result.json at the repository root with this exact JSON structure:
 {\"score\": <1-10>, \"summary\": \"brief description of what you did\", \"files_changed\": [\"list of files\"], \"issues\": [\"any remaining issues\"]}
@@ -227,7 +228,6 @@ Review all your changes, fix the issues, improve the code quality, and re-score.
     psql -c "UPDATE coding_tasks SET status='pushing', score=$SCORE, iterations=$ITERATIONS, updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
 
     git add -A
-    # Remove agent artifacts from staging
     git reset HEAD .agent-result.json 2>/dev/null || true
     rm -f .agent-result.json
 
@@ -240,7 +240,7 @@ Agent: $TASK_ID | Score: $SCORE/10 | Iterations: $ITERATIONS
 COMMITEOF
     )"
 
-    # Set remote URL with token for push, then reset
+    # Push (set token URL temporarily)
     cd "$REPO_DIR"
     git remote set-url origin "https://x-access-token:''${GITHUB_TOKEN}@github.com/$REPO.git"
     cd "$WORKTREE_DIR"
@@ -278,44 +278,21 @@ _Autonomous coding agent — self-reviewed and scored_"
       PR_NUMBER=$(echo "$PR_URL" | grep -oP '/pull/\K[0-9]+' || echo "")
     fi
 
-    # Start dev servers (detect from package.json)
+    # Start services via wt (ports handled automatically by wt config)
     PREVIEW_URL=""
-    DEV_PID=""
-    BE_PORT=$((PREVIEW_PORT + 1))
+    cd "$REPO_DIR"
+    $WT start "$BRANCH" --all 2>&1 || true
 
-    if [ -f "package.json" ]; then
-      # Install dependencies
-      if [ -f "package-lock.json" ] || [ -f "yarn.lock" ] || [ -f "pnpm-lock.yaml" ]; then
-        npm install --legacy-peer-deps 2>&1 || true
-      fi
-
-      # Detect dev command
-      DEV_CMD=$(jq -r '.scripts.dev // .scripts.start // empty' package.json 2>/dev/null)
-      if [ -n "$DEV_CMD" ]; then
-        echo "[agent] Starting dev server on port $PREVIEW_PORT (BE on $BE_PORT)..."
-        PORT=$PREVIEW_PORT BACKEND_PORT=$BE_PORT API_PORT=$BE_PORT \
-          nohup npm run dev -- --port "$PREVIEW_PORT" > "$TASK_DIR/dev-server.log" 2>&1 &
-        DEV_PID=$!
-        echo "$DEV_PID" > "$TASK_DIR/dev-server.pid"
-        PREVIEW_URL="http://sweet:$PREVIEW_PORT"
-        echo "[agent] Dev server PID $DEV_PID on $PREVIEW_URL"
-      fi
-
-      # If there's a separate server/api script, start that on BE port
-      BE_CMD=$(jq -r '.scripts["dev:server"] // .scripts["dev:api"] // .scripts["start:server"] // empty' package.json 2>/dev/null)
-      if [ -n "$BE_CMD" ]; then
-        SCRIPT_NAME=$(jq -r 'if .scripts["dev:server"] then "dev:server" elif .scripts["dev:api"] then "dev:api" else "start:server" end' package.json 2>/dev/null)
-        echo "[agent] Starting backend on port $BE_PORT..."
-        PORT=$BE_PORT nohup npm run "$SCRIPT_NAME" -- --port "$BE_PORT" > "$TASK_DIR/be-server.log" 2>&1 &
-        BE_PID=$!
-        echo "$BE_PID" > "$TASK_DIR/be-server.pid"
-        echo "[agent] Backend PID $BE_PID on http://sweet:$BE_PORT"
-      fi
+    # Extract port info from wt
+    PORT_INFO=$($WT ports "$BRANCH" 2>&1 | grep -E "^export PORT_" | head -1 || true)
+    if [ -n "$PORT_INFO" ]; then
+      MAIN_PORT=$(echo "$PORT_INFO" | grep -oP '=\K[0-9]+')
+      PREVIEW_URL="http://sweet:$MAIN_PORT"
     fi
 
     # Update DB
     SAFE_PR_URL=$(echo "$PR_URL" | sed "s/'/''/g" | head -1)
-    psql -c "UPDATE coding_tasks SET status='done', score=$SCORE, iterations=$ITERATIONS, pr_url='$SAFE_PR_URL', pr_number=$(echo "''${PR_NUMBER:-0}"), preview_pid=$(echo "''${DEV_PID:-0}"), completed_at=NOW(), updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
+    psql -c "UPDATE coding_tasks SET status='done', score=$SCORE, iterations=$ITERATIONS, pr_url='$SAFE_PR_URL', pr_number=$(echo "''${PR_NUMBER:-0}"), completed_at=NOW(), updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
 
     # Notify via WhatsApp
     NOTIFY_MSG="$(printf '🤖 *Coding Agent Done*\n\n*Task*: %s\n*Repo*: %s\n*Score*: %s/10 (%s iterations)\n*PR*: %s' "$TASK_ID" "$REPO" "$SCORE" "$ITERATIONS" "''${PR_URL:-no PR}")"
@@ -328,8 +305,10 @@ _Autonomous coding agent — self-reviewed and scored_"
   '';
 
   workspaceScript = pkgs.writeShellScript "coding-workspace" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.findutils}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.findutils}/bin:${pkgs.yq-go}/bin:${pkgs.tmux}/bin:$PATH
     WORKSPACE="${cfg.workspaceDir}"
+    WT="${wtBin}"
+    export HOME="$WORKSPACE"
 
     case "''${1:-}" in
       clone)
@@ -347,7 +326,10 @@ _Autonomous coding agent — self-reviewed and scored_"
         git config user.name "Coding Agent"
         git config user.email "agent@demasi.dev"
         git remote set-url origin "https://github.com/$REPO.git"
-        echo "Cloned: $REPO"
+
+        # Initialize wt config
+        $WT init 2>/dev/null || true
+        echo "Cloned: $REPO (wt config initialized — edit at ~/.config/wt/projects/)"
         ;;
       list)
         echo "=== Cloned Repos ==="
@@ -377,12 +359,22 @@ _Autonomous coding agent — self-reviewed and scored_"
           done
         fi
         ;;
+      config)
+        REPO="$2"
+        [ -z "$REPO" ] && echo "Usage: coding-workspace config OWNER/REPO" && exit 1
+        REPO_NAME=$(basename "$REPO")
+        CONFIG="$WORKSPACE/.config/wt/projects/$REPO_NAME.yaml"
+        if [ -f "$CONFIG" ]; then
+          cat "$CONFIG"
+        else
+          echo "No wt config found for $REPO. Run: coding-workspace clone $REPO"
+        fi
+        ;;
       remove)
         REPO="$2"
         [ -z "$REPO" ] && echo "Usage: coding-workspace remove OWNER/REPO" && exit 1
         REPO_DIR="$WORKSPACE/repos/$REPO"
         [ ! -d "$REPO_DIR" ] && echo "Not found: $REPO" && exit 1
-        # Check for active worktrees
         ACTIVE=$(cd "$REPO_DIR" && git worktree list --porcelain | grep -c "worktree" || echo "1")
         if [ "$ACTIVE" -gt 1 ]; then
           echo "Cannot remove: $REPO has active worktrees"
@@ -393,15 +385,17 @@ _Autonomous coding agent — self-reviewed and scored_"
         echo "Removed: $REPO"
         ;;
       *)
-        echo "Usage: coding-workspace {clone|list|update|remove} [OWNER/REPO]"
+        echo "Usage: coding-workspace {clone|list|update|config|remove} [OWNER/REPO]"
         ;;
     esac
   '';
 
   tasksScript = pkgs.writeShellScript "coding-tasks" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.gh}/bin:${pkgs.gnugrep}/bin:${pkgs.procps}/bin:${pkgs.systemd}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.gh}/bin:${pkgs.gnugrep}/bin:${pkgs.procps}/bin:${pkgs.systemd}/bin:${pkgs.yq-go}/bin:${pkgs.tmux}/bin:$PATH
     DB="${dbUrl}"
     WORKSPACE="${cfg.workspaceDir}"
+    WT="${wtBin}"
+    export HOME="$WORKSPACE"
 
     case "''${1:-}" in
       list)
@@ -423,7 +417,7 @@ _Autonomous coding agent — self-reviewed and scored_"
       status)
         TASK_ID="$2"
         [ -z "$TASK_ID" ] && echo "Usage: coding-tasks status TASK_ID" && exit 1
-        psql -t -A -c "SELECT json_build_object('id',id,'repo',repo,'branch',branch,'status',status,'score',score,'iterations',iterations,'task',task_description,'pr_url',pr_url,'pr_number',pr_number,'preview_port',preview_port,'error',error,'created_at',created_at,'completed_at',completed_at) FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null | jq '.' 2>/dev/null
+        psql -t -A -c "SELECT json_build_object('id',id,'repo',repo,'branch',branch,'status',status,'score',score,'iterations',iterations,'task',task_description,'pr_url',pr_url,'pr_number',pr_number,'error',error,'created_at',created_at,'completed_at',completed_at) FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null | jq '.' 2>/dev/null
         ;;
       logs)
         TASK_ID="$2"
@@ -440,6 +434,12 @@ _Autonomous coding agent — self-reviewed and scored_"
         TASK_ID="$2"
         [ -z "$TASK_ID" ] && echo "Usage: coding-tasks cancel TASK_ID" && exit 1
         systemctl stop "coding-agent@$TASK_ID.service" 2>/dev/null || true
+        # Stop wt services
+        BRANCH=$(psql -t -A -c "SELECT branch FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        REPO=$(psql -t -A -c "SELECT repo FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        if [ -n "$BRANCH" ] && [ -n "$REPO" ]; then
+          cd "$WORKSPACE/repos/$REPO" 2>/dev/null && $WT stop "$BRANCH" --all 2>/dev/null || true
+        fi
         psql -c "UPDATE coding_tasks SET status='cancelled', updated_at=NOW() WHERE id='$TASK_ID' AND status NOT IN ('done','failed','cancelled');" "$DB" 2>/dev/null
         echo "Cancelled: $TASK_ID"
         ;;
@@ -459,33 +459,39 @@ _Autonomous coding agent — self-reviewed and scored_"
       preview)
         TASK_ID="$2"
         [ -z "$TASK_ID" ] && echo "Usage: coding-tasks preview TASK_ID" && exit 1
-        PORT=$(psql -t -A -c "SELECT preview_port FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
-        PID_FILE="$WORKSPACE/tasks/$TASK_ID/dev-server.pid"
-        if [ -f "$PID_FILE" ]; then
-          PID=$(cat "$PID_FILE")
-          if kill -0 "$PID" 2>/dev/null; then
-            echo "Preview running: http://sweet:$PORT (PID: $PID)"
-          else
-            echo "Preview stopped (PID $PID not running). Port was: $PORT"
-          fi
+        BRANCH=$(psql -t -A -c "SELECT branch FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        REPO=$(psql -t -A -c "SELECT repo FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        if [ -n "$BRANCH" ] && [ -n "$REPO" ]; then
+          cd "$WORKSPACE/repos/$REPO" 2>/dev/null
+          echo "=== Services for $BRANCH ==="
+          $WT ports "$BRANCH" 2>/dev/null || echo "No services running"
         else
-          echo "No preview server for task $TASK_ID"
+          echo "Task not found"
         fi
         ;;
       ports)
-        echo "=== Running Previews ==="
-        psql -t -A -c "SELECT id || ' | ' || repo || ' | port:' || preview_port || ' | ' || status FROM coding_tasks WHERE preview_port IS NOT NULL AND status = 'done' ORDER BY created_at DESC;" "$DB" 2>/dev/null
+        echo "=== All Running Previews ==="
+        # Check each done task for running wt services
+        psql -t -A -c "SELECT id || '|' || repo || '|' || branch FROM coding_tasks WHERE status = 'done' ORDER BY created_at DESC LIMIT 10;" "$DB" 2>/dev/null | while IFS='|' read -r tid trepo tbranch; do
+          if [ -n "$tbranch" ] && [ -n "$trepo" ]; then
+            PORT_LINE=$(cd "$WORKSPACE/repos/$trepo" 2>/dev/null && $WT ports "$tbranch" 2>/dev/null | grep -E "^export PORT_" | head -1 || true)
+            if [ -n "$PORT_LINE" ]; then
+              PORT=$(echo "$PORT_LINE" | grep -oP '=\K[0-9]+')
+              echo "$tid | $trepo | $tbranch | http://sweet:$PORT"
+            fi
+          fi
+        done
         ;;
       stop-preview)
         TASK_ID="$2"
         [ -z "$TASK_ID" ] && echo "Usage: coding-tasks stop-preview TASK_ID" && exit 1
-        PID_FILE="$WORKSPACE/tasks/$TASK_ID/dev-server.pid"
-        if [ -f "$PID_FILE" ]; then
-          PID=$(cat "$PID_FILE")
-          kill "$PID" 2>/dev/null && echo "Stopped preview (PID $PID)" || echo "Process already stopped"
-          rm -f "$PID_FILE"
+        BRANCH=$(psql -t -A -c "SELECT branch FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        REPO=$(psql -t -A -c "SELECT repo FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null)
+        if [ -n "$BRANCH" ] && [ -n "$REPO" ]; then
+          cd "$WORKSPACE/repos/$REPO" 2>/dev/null && $WT stop "$BRANCH" --all 2>/dev/null
+          echo "Stopped services for $BRANCH"
         else
-          echo "No preview server for task $TASK_ID"
+          echo "Task not found"
         fi
         ;;
       *)
@@ -495,14 +501,15 @@ _Autonomous coding agent — self-reviewed and scored_"
   '';
 
   cleanupScript = pkgs.writeShellScript "coding-agents-cleanup" ''
-    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.postgresql}/bin:${pkgs.findutils}/bin:${pkgs.procps}/bin:$PATH
+    export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.postgresql}/bin:${pkgs.findutils}/bin:${pkgs.procps}/bin:${pkgs.yq-go}/bin:${pkgs.tmux}/bin:$PATH
     DB="${dbUrl}"
     WORKSPACE="${cfg.workspaceDir}"
+    WT="${wtBin}"
+    export HOME="$WORKSPACE"
     RETENTION=${toString cfg.retentionDays}
 
     echo "[cleanup] Cleaning tasks older than $RETENTION days..."
 
-    # Get old completed tasks
     OLD_TASKS=$(psql -t -A -c "SELECT id || '|' || repo || '|' || branch FROM coding_tasks WHERE status IN ('done','failed','cancelled') AND completed_at < NOW() - INTERVAL '$RETENTION days';" "$DB" 2>/dev/null)
 
     for entry in $OLD_TASKS; do
@@ -512,22 +519,17 @@ _Autonomous coding agent — self-reviewed and scored_"
       REPO_DIR="$WORKSPACE/repos/$REPO"
       TASK_DIR="$WORKSPACE/tasks/$TASK_ID"
 
-      # Kill dev server if running
-      if [ -f "$TASK_DIR/dev-server.pid" ]; then
-        kill "$(cat "$TASK_DIR/dev-server.pid")" 2>/dev/null || true
-      fi
-
-      # Remove worktree
+      # Stop and delete via wt
       if [ -d "$REPO_DIR" ] && [ -n "$BRANCH" ]; then
         cd "$REPO_DIR"
-        git worktree remove "$TASK_DIR/worktree" --force 2>/dev/null || true
-        git branch -D "$BRANCH" 2>/dev/null || true
+        $WT stop "$BRANCH" --all 2>/dev/null || true
+        $WT delete "$BRANCH" 2>/dev/null || true
       fi
 
-      # Remove task directory
+      # Remove task metadata directory
       rm -rf "$TASK_DIR"
 
-      # Update DB
+      # Delete DB record
       psql -c "DELETE FROM coding_tasks WHERE id='$TASK_ID';" "$DB" 2>/dev/null
 
       echo "[cleanup] Removed task $TASK_ID"
@@ -568,15 +570,6 @@ in
       type = lib.types.int;
       default = 3;
     };
-    portsPerTask = lib.mkOption {
-      type = lib.types.int;
-      default = 3;
-      description = "Ports allocated per task (e.g. frontend, backend, extra)";
-    };
-    previewBasePort = lib.mkOption {
-      type = lib.types.int;
-      default = 4300;
-    };
     retentionDays = lib.mkOption {
       type = lib.types.int;
       default = 30;
@@ -591,12 +584,14 @@ in
       "d ${cfg.workspaceDir}/tasks 0750 root root - -"
       "d ${cfg.workspaceDir}/scripts 0750 root root - -"
       "d ${cfg.workspaceDir}/.claude 0700 root root - -"
+      "d ${cfg.workspaceDir}/.config/wt/projects 0750 root root - -"
+      "d ${cfg.workspaceDir}/.local/share/wt 0750 root root - -"
       "L+ ${cfg.workspaceDir}/scripts/coding-agent-run.sh - - - - ${runScript}"
       "L+ ${cfg.workspaceDir}/scripts/coding-workspace.sh - - - - ${workspaceScript}"
       "L+ ${cfg.workspaceDir}/scripts/coding-tasks.sh - - - - ${tasksScript}"
     ];
 
-    # Agent system prompt
+    # Agent system prompt — no port/service management, wt handles that
     environment.etc."coding-agents/agent-prompt.txt".text = ''
       You are an autonomous coding agent. Your task will be provided in the prompt.
 
@@ -620,13 +615,6 @@ in
       - 5-6: Functional but has notable issues or doesn't fully match patterns.
       - 1-4: Incomplete or has significant problems.
 
-      ## Dev Server Ports
-      Your task prompt includes allocated ports. For full-stack projects:
-      - Use the frontend port for the main dev server (Next.js, Vite, etc.)
-      - Use the backend port for API servers (Express, Fastify, etc.)
-      - Configure the frontend to proxy API calls to the backend port
-      - Bind to 0.0.0.0 so the server is accessible on the LAN
-
       ## Rules
       - Read before you write. Always understand existing code first.
       - Match the project's existing style exactly — don't impose your own conventions.
@@ -635,18 +623,19 @@ in
       - Don't commit secrets, .env files, or credentials.
       - Prefer editing existing files over creating new ones when possible.
       - Keep solutions simple and focused on the task.
+      - Do NOT worry about ports, services, or dev server configuration — that is handled externally.
     '';
 
-    # Install Claude Code CLI
+    # Install Claude Code CLI + wt
     systemd.services.coding-agents-install = {
-      description = "Install Claude Code CLI";
+      description = "Install Claude Code CLI and wt";
       wantedBy = [ "multi-user.target" ];
       environment.HOME = cfg.workspaceDir;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "coding-agents-install" ''
-          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:$PATH
+          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.bash}/bin:$PATH
           export HOME=${cfg.workspaceDir}
 
           # Install Claude Code if not present
@@ -656,7 +645,14 @@ in
             ${pkgs.nodejs_22}/bin/npm install @anthropic-ai/claude-code 2>&1
           fi
 
-          echo "[install] Claude Code CLI ready"
+          # Install wt if not present
+          if [ ! -f ${wtBin} ]; then
+            echo "[install] Installing wt (git worktree manager)..."
+            ${pkgs.git}/bin/git clone --depth 1 https://github.com/brunodmsi/wt.git ${cfg.workspaceDir}/wt 2>&1
+            chmod +x ${wtBin}
+          fi
+
+          echo "[install] Claude Code CLI + wt ready"
         '';
       };
     };
@@ -683,8 +679,6 @@ in
             iterations INTEGER DEFAULT 0,
             pr_url TEXT,
             pr_number INTEGER,
-            preview_port INTEGER,
-            preview_pid INTEGER,
             log_file TEXT,
             error TEXT,
             created_at TIMESTAMP DEFAULT NOW(),
@@ -701,10 +695,11 @@ in
       after = [ "network-online.target" "postgresql.service" "coding-agents-db-init.service" "coding-agents-install.service" ];
       wants = [ "network-online.target" ];
       requires = [ "coding-agents-install.service" "coding-agents-db-init.service" ];
-      path = with pkgs; [ bash coreutils git jq postgresql nodejs_22 gh gnugrep gnused findutils procps ];
+      path = with pkgs; [ bash coreutils git jq postgresql nodejs_22 gh gnugrep gnused findutils procps yq-go tmux ];
       environment = {
         HOME = cfg.workspaceDir;
         CLAUDE_CONFIG_DIR = "${cfg.workspaceDir}/.claude";
+        TERM = "dumb";
       };
       serviceConfig = {
         Type = "oneshot";
@@ -712,6 +707,45 @@ in
         ExecStart = "${workerScript} %i";
         StandardOutput = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
         StandardError = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
+      };
+    };
+
+    # Auth health check — verify Claude Code credentials, notify if expired
+    systemd.services.coding-agents-auth-check = {
+      description = "Check Claude Code authentication status";
+      after = [ "coding-agents-install.service" "network-online.target" ];
+      wants = [ "network-online.target" ];
+      path = with pkgs; [ bash coreutils nodejs_22 gnugrep ];
+      environment = {
+        HOME = cfg.workspaceDir;
+        CLAUDE_CONFIG_DIR = "${cfg.workspaceDir}/.claude";
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = pkgs.writeShellScript "coding-agents-auth-check" ''
+          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:$PATH
+          export HOME=${cfg.workspaceDir}
+          export CLAUDE_CONFIG_DIR="${cfg.workspaceDir}/.claude"
+
+          CREDS="${cfg.workspaceDir}/.claude/.credentials.json"
+          if [ ! -f "$CREDS" ]; then
+            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code not authenticated\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
+            exit 0
+          fi
+
+          RESULT=$(timeout 30 ${claudeBin} -p "respond with exactly: OK" --max-turns 1 --output-format text 2>&1 || echo "AUTH_FAILED")
+          if echo "$RESULT" | grep -qi "auth\|unauthorized\|login\|credential\|AUTH_FAILED"; then
+            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code auth expired\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
+          fi
+        '';
+      };
+    };
+    systemd.timers.coding-agents-auth-check = {
+      description = "Daily Claude Code auth check";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "*-*-* 08:00:00";
+        Persistent = true;
       };
     };
 
@@ -732,50 +766,9 @@ in
       };
     };
 
-    # Auth health check — verify Claude Code credentials are valid, notify if expired
-    systemd.services.coding-agents-auth-check = {
-      description = "Check Claude Code authentication status";
-      after = [ "coding-agents-install.service" "network-online.target" ];
-      wants = [ "network-online.target" ];
-      path = with pkgs; [ bash coreutils nodejs_22 ];
-      environment = {
-        HOME = cfg.workspaceDir;
-        CLAUDE_CONFIG_DIR = "${cfg.workspaceDir}/.claude";
-      };
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "coding-agents-auth-check" ''
-          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:$PATH
-          export HOME=${cfg.workspaceDir}
-          export CLAUDE_CONFIG_DIR="${cfg.workspaceDir}/.claude"
-
-          CREDS="${cfg.workspaceDir}/.claude/.credentials.json"
-          if [ ! -f "$CREDS" ]; then
-            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code not authenticated\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
-            exit 0
-          fi
-
-          # Quick check: try a minimal claude call
-          RESULT=$(timeout 30 ${claudeBin} -p "respond with exactly: OK" --max-turns 1 --output-format text 2>&1 || echo "AUTH_FAILED")
-          if echo "$RESULT" | grep -qi "auth\|unauthorized\|login\|credential\|AUTH_FAILED"; then
-            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code auth expired\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
-          fi
-        '';
-      };
-    };
-    systemd.timers.coding-agents-auth-check = {
-      description = "Daily Claude Code auth check";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnCalendar = "*-*-* 08:00:00";
-        Persistent = true;
-      };
-    };
-
-    # Open preview port range in firewall (LAN access)
-    # maxConcurrent * portsPerTask * 3 (headroom for completed but still running previews)
+    # Open port range for wt-managed dev servers (LAN access)
     networking.firewall.allowedTCPPortRanges = [
-      { from = cfg.previewBasePort; to = cfg.previewBasePort + (cfg.maxConcurrent * cfg.portsPerTask * 10); }
+      { from = 3000; to = 5300; }
     ];
   };
 }
