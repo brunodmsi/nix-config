@@ -69,9 +69,11 @@ in
       mediaLocation = "${cfg.mediaDir}";
     };
     services.caddy.virtualHosts."http://${cfg.url}" = {
-      
       extraConfig = ''
-        reverse_proxy http://${config.services.immich.host}:${toString config.services.immich.port}
+        reverse_proxy http://${config.services.immich.host}:${toString config.services.immich.port} {
+          header_up X-Forwarded-Proto "https"
+          header_up X-Forwarded-Port "443"
+        }
       '';
     };
   };

@@ -102,7 +102,10 @@ in
 
     services.caddy.virtualHosts."http://${cfg.url}" = {
       extraConfig = ''
-        reverse_proxy http://127.0.0.1:8009
+        reverse_proxy http://127.0.0.1:8009 {
+          header_up X-Forwarded-Proto "https"
+          header_up X-Forwarded-Port "443"
+        }
       '';
     };
   };
