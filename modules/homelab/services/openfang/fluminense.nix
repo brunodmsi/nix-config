@@ -54,7 +54,7 @@ let
 
     # Must find today's date (DD/MM or DD/M or just day number near "Fluminense x") in results
     # This prevents matching results about other dates
-    HAS_DATE=$(echo "$CONTENTS $SCHEDULE_TEXT" | ${pkgs.gnugrep}/bin/grep -icP "(${TODAY_SHORT}|${TODAY}|${TODAY_ISO}).{0,80}(fluminense|flu\b)|(fluminense|flu\b).{0,80}(${TODAY_SHORT}|${TODAY}|${TODAY_ISO})" || echo "0")
+    HAS_DATE=$(echo "$CONTENTS $SCHEDULE_TEXT" | ${pkgs.gnugrep}/bin/grep -icP "($TODAY_SHORT|$TODAY|$TODAY_ISO).{0,80}(fluminense|flu\b)|(fluminense|flu\b).{0,80}($TODAY_SHORT|$TODAY|$TODAY_ISO)" || echo "0")
 
     if [ "$HAS_DATE" -eq 0 ]; then
       echo "[flu] No date match for $TODAY in search results — skipping"
