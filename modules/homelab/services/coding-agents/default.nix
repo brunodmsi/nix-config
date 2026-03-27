@@ -564,18 +564,23 @@ in
       type = lib.types.int;
       default = 30;
     };
+    user = lib.mkOption {
+      type = lib.types.str;
+      default = "bmasi";
+      description = "User to run coding agents as (cannot be root)";
+    };
   };
 
   config = lib.mkIf cfg.enable {
     # Ensure workspace directories exist
     systemd.tmpfiles.rules = [
-      "d ${cfg.workspaceDir} 0750 root root - -"
-      "d ${cfg.workspaceDir}/repos 0750 root root - -"
-      "d ${cfg.workspaceDir}/tasks 0750 root root - -"
-      "d ${cfg.workspaceDir}/scripts 0750 root root - -"
-      "d ${cfg.workspaceDir}/.claude 0700 root root - -"
-      "d ${cfg.workspaceDir}/.config/wt/projects 0750 root root - -"
-      "d ${cfg.workspaceDir}/.local/share/wt 0750 root root - -"
+      "d ${cfg.workspaceDir} 0750 ${cfg.user} users - -"
+      "d ${cfg.workspaceDir}/repos 0750 ${cfg.user} users - -"
+      "d ${cfg.workspaceDir}/tasks 0750 ${cfg.user} users - -"
+      "d ${cfg.workspaceDir}/scripts 0750 ${cfg.user} users - -"
+      "d ${cfg.workspaceDir}/.claude 0700 ${cfg.user} users - -"
+      "d ${cfg.workspaceDir}/.config/wt/projects 0750 ${cfg.user} users - -"
+      "d ${cfg.workspaceDir}/.local/share/wt 0750 ${cfg.user} users - -"
       "L+ ${cfg.workspaceDir}/scripts/coding-agent-run.sh - - - - ${runScript}"
       "L+ ${cfg.workspaceDir}/scripts/coding-workspace.sh - - - - ${workspaceScript}"
       "L+ ${cfg.workspaceDir}/scripts/coding-tasks.sh - - - - ${tasksScript}"
@@ -624,6 +629,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        User = cfg.user;
         ExecStart = pkgs.writeShellScript "coding-agents-install" ''
           export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.bash}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin:$PATH
           export HOME=${cfg.workspaceDir}
@@ -696,6 +702,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         TimeoutStartSec = "30min";
+        User = cfg.user;
         ExecStart = "${workerScript} %i";
         StandardOutput = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
         StandardError = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
@@ -723,6 +730,7 @@ in
       };
       serviceConfig = {
         Type = "oneshot";
+        User = cfg.user;
         ExecStart = pkgs.writeShellScript "coding-agents-auth-check" ''
           export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:$PATH
           export HOME=${cfg.workspaceDir}

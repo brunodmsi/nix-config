@@ -127,7 +127,10 @@
       nextcloudAppPassword.file = "${inputs.secrets}/nextcloudAppPassword.age";
       geminiApiKey.file = "${inputs.secrets}/geminiApiKey.age";
       tavilyApiKey.file = "${inputs.secrets}/tavilyApiKey.age";
-      githubToken.file = "${inputs.secrets}/githubToken.age";
+      githubToken = {
+        file = "${inputs.secrets}/githubToken.age";
+        owner = "bmasi";
+      };
     };
   };
 
