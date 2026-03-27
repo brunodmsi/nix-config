@@ -93,7 +93,7 @@ let
     psql -c "INSERT INTO coding_tasks (id, repo, branch, base_branch, task_description, status, log_file) VALUES ('$TASK_ID', '$REPO', '$BRANCH', '$BASE_BRANCH', '$SAFE_TASK', 'queued', '$TASK_DIR/agent.log');" "$DB"
 
     # Start background service
-    systemctl start "coding-agent@$TASK_ID.service" 2>/dev/null &
+    sudo systemctl start "coding-agent@$TASK_ID.service" 2>/dev/null &
 
     # Return task info
     ${pkgs.jq}/bin/jq -n \
@@ -779,5 +779,14 @@ in
     networking.firewall.allowedTCPPortRanges = [
       { from = 3000; to = 5300; }
     ];
+
+    # Let the coding-agents user start/stop agent services without password
+    security.sudo.extraRules = [{
+      users = [ cfg.user ];
+      commands = [
+        { command = "/run/current-system/sw/bin/systemctl start coding-agent@*"; options = [ "NOPASSWD" ]; }
+        { command = "/run/current-system/sw/bin/systemctl stop coding-agent@*"; options = [ "NOPASSWD" ]; }
+      ];
+    }];
   };
 }
