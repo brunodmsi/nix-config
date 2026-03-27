@@ -96,8 +96,12 @@ let
     SAFE_TASK=$(echo "$TASK" | sed "s/'''/''''/g")
     psql -c "INSERT INTO coding_tasks (id, repo, branch, base_branch, task_description, status, log_file) VALUES ('$TASK_ID', '$REPO', '$BRANCH', '$BASE_BRANCH', '$SAFE_TASK', 'queued', '$TASK_DIR/agent.log');" "$DB"
 
-    # Start background service
-    sudo /run/current-system/sw/bin/systemctl start "coding-agent@$TASK_ID.service" &
+    # Start background service (sudo if not root, direct if root)
+    if [ "$(id -u)" = "0" ]; then
+      /run/current-system/sw/bin/systemctl start --no-block "coding-agent@$TASK_ID.service"
+    else
+      sudo /run/current-system/sw/bin/systemctl start --no-block "coding-agent@$TASK_ID.service"
+    fi
 
     # Return task info
     ${pkgs.jq}/bin/jq -n \
@@ -400,17 +404,17 @@ _Autonomous coding agent — self-reviewed and scored_"
       list)
         STATUS_FILTER="''${2:-}"
         if [ -n "$STATUS_FILTER" ] && [ "$STATUS_FILTER" != "--status" ]; then
-          QUERY="SELECT json_agg(json_build_object('id',id,'repo',repo,'status',status,'score',score,'task',substring(task_description for 80),'pr_url',pr_url,'created_at',created_at)) FROM coding_tasks WHERE status='$STATUS_FILTER' ORDER BY created_at DESC;"
+          WHERE="WHERE status='$STATUS_FILTER'"
         elif [ -n "''${3:-}" ]; then
-          QUERY="SELECT json_agg(json_build_object('id',id,'repo',repo,'status',status,'score',score,'task',substring(task_description for 80),'pr_url',pr_url,'created_at',created_at)) FROM coding_tasks WHERE status='$3' ORDER BY created_at DESC;"
+          WHERE="WHERE status='$3'"
         else
-          QUERY="SELECT json_agg(json_build_object('id',id,'repo',repo,'status',status,'score',score,'task',substring(task_description for 80),'pr_url',pr_url,'created_at',created_at)) FROM coding_tasks ORDER BY created_at DESC LIMIT 20;"
+          WHERE=""
         fi
-        RESULT=$(psql -t -A -c "$QUERY" "$DB" 2>/dev/null)
-        if [ "$RESULT" = "" ] || [ "$RESULT" = "null" ]; then
+        RESULT=$(psql -t -A -c "SELECT json_build_object('id',id,'repo',repo,'status',status,'score',score,'task',substring(task_description for 80),'pr_url',pr_url,'created_at',created_at) FROM coding_tasks $WHERE ORDER BY created_at DESC LIMIT 20;" "$DB" 2>/dev/null)
+        if [ -z "$RESULT" ]; then
           echo "No tasks found"
         else
-          echo "$RESULT" | jq '.' 2>/dev/null || echo "$RESULT"
+          echo "[$RESULT]" | sed 's/}{/},{/g' | jq '.' 2>/dev/null || echo "$RESULT"
         fi
         ;;
       status)
