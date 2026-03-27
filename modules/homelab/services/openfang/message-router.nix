@@ -81,11 +81,11 @@ in
         GATEWAY_URL = "http://127.0.0.1:3010";
         PAPERLESS_API_URL = paperlessApiUrl;
         FFMPEG_PATH = "${pkgs.ffmpeg-headless}/bin/ffmpeg";
-        MEDIA_TMP_DIR = "/tmp/openfang-media";
+        MEDIA_TMP_DIR = "${cfg.configDir}/media-tmp";
       };
       serviceConfig = {
         ExecStartPre = pkgs.writeShellScript "router-load-secrets" ''
-          mkdir -p /tmp/openfang-media
+          mkdir -p ${cfg.configDir}/media-tmp
         '';
         ExecStart = pkgs.writeShellScript "openfang-router-run" ''
           ${lib.optionalString plCfg.enable ''
@@ -103,7 +103,7 @@ in
 
     # Paperless upload script for Fluzy to call via shell_exec (for images after user confirms)
     systemd.tmpfiles.rules = [
-      "d /tmp/openfang-media 0755 root root - -"
+      "d ${cfg.configDir}/media-tmp 0755 root root 7d -"
     ] ++ lib.optionals plCfg.enable [
       "L+ /persist/openfang/scripts/paperless-upload.sh - - - - ${paperlessUploadScript}"
     ];

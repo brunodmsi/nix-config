@@ -14,7 +14,7 @@ import http from 'node:http';
 const PAPERLESS_API_URL = (process.env.PAPERLESS_API_URL || 'http://127.0.0.1:28981').replace(/\/+$/, '');
 const PAPERLESS_API_TOKEN = process.env.PAPERLESS_API_TOKEN || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const MEDIA_TMP_DIR = process.env.MEDIA_TMP_DIR || '/tmp/openfang-media';
+const MEDIA_TMP_DIR = process.env.MEDIA_TMP_DIR || '/persist/openfang/media-tmp';
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 
 // Ensure tmp dir exists
