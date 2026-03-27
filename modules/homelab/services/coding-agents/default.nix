@@ -581,6 +581,59 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # CLI wrapper: `ca run`, `ca status`, `ca logs`, etc.
+    environment.systemPackages = [
+      (pkgs.writeShellScriptBin "ca" ''
+        export PATH=${pkgs.coreutils}/bin:$PATH
+        SCRIPTS="${cfg.workspaceDir}/scripts"
+        CMD="''${1:-help}"
+        shift 2>/dev/null || true
+
+        case "$CMD" in
+          run)       exec "$SCRIPTS/coding-agent-run.sh" "$@" ;;
+          status)    exec "$SCRIPTS/coding-tasks.sh" status "$@" ;;
+          logs)      exec "$SCRIPTS/coding-tasks.sh" logs "$@" ;;
+          list)      exec "$SCRIPTS/coding-tasks.sh" list "$@" ;;
+          cancel)    exec "$SCRIPTS/coding-tasks.sh" cancel "$@" ;;
+          pr)        exec "$SCRIPTS/coding-tasks.sh" pr-info "$@" ;;
+          preview)   exec "$SCRIPTS/coding-tasks.sh" preview "$@" ;;
+          ports)     exec "$SCRIPTS/coding-tasks.sh" ports ;;
+          stop)      exec "$SCRIPTS/coding-tasks.sh" stop-preview "$@" ;;
+          clone)     exec "$SCRIPTS/coding-workspace.sh" clone "$@" ;;
+          repos)     exec "$SCRIPTS/coding-workspace.sh" list ;;
+          config)    exec "$SCRIPTS/coding-workspace.sh" config "$@" ;;
+          update)    exec "$SCRIPTS/coding-workspace.sh" update "$@" ;;
+          tail)
+            TASK_ID="$1"
+            [ -z "$TASK_ID" ] && echo "Usage: ca tail TASK_ID" && exit 1
+            exec tail -f "${cfg.workspaceDir}/tasks/$TASK_ID/agent.log"
+            ;;
+          *)
+            echo "ca — coding agents CLI"
+            echo ""
+            echo "Tasks:"
+            echo "  ca run --repo OWNER/REPO --task \"description\" [--branch main]"
+            echo "  ca list [running|done|failed]"
+            echo "  ca status TASK_ID"
+            echo "  ca logs TASK_ID [--tail N]"
+            echo "  ca tail TASK_ID              (live follow)"
+            echo "  ca cancel TASK_ID"
+            echo "  ca pr TASK_ID"
+            echo ""
+            echo "Previews:"
+            echo "  ca preview TASK_ID"
+            echo "  ca ports"
+            echo "  ca stop TASK_ID"
+            echo ""
+            echo "Repos:"
+            echo "  ca clone OWNER/REPO"
+            echo "  ca repos"
+            echo "  ca config OWNER/REPO"
+            echo "  ca update [OWNER/REPO]"
+            ;;
+        esac
+      '')
+    ];
     # Ensure workspace directories exist
     systemd.tmpfiles.rules = [
       "d ${cfg.workspaceDir} 0750 ${cfg.user} users - -"
