@@ -285,16 +285,19 @@ _Autonomous coding agent — self-reviewed and scored_"
       PREVIEW_URL="http://sweet:$MAIN_PORT"
     fi
 
-    # Update DB
+    # Update DB — do this BEFORE notification so task is marked done regardless
     SAFE_PR_URL=$(echo "$PR_URL" | sed "s/'''/''''/g" | head -1)
     psql -c "UPDATE coding_tasks SET status='done', score=$SCORE, iterations=$ITERATIONS, pr_url='$SAFE_PR_URL', pr_number=$(echo "''${PR_NUMBER:-0}"), completed_at=NOW(), updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
 
-    # Notify via WhatsApp
+    # Disable ERR trap — everything after this is best-effort
+    trap - ERR
+
+    # Notify via WhatsApp (best-effort, don't fail the task)
     NOTIFY_MSG="$(printf '🤖 *Coding Agent Done*\n\n*Task*: %s\n*Repo*: %s\n*Score*: %s/10 (%s iterations)\n*PR*: %s' "$TASK_ID" "$REPO" "$SCORE" "$ITERATIONS" "''${PR_URL:-no PR}")"
     if [ -n "$PREVIEW_URL" ]; then
       NOTIFY_MSG="$NOTIFY_MSG$(printf '\n*Preview*: %s' "$PREVIEW_URL")"
     fi
-    ${waNotify} "" "$NOTIFY_MSG"
+    ${waNotify} "" "$NOTIFY_MSG" || echo "[agent] wa-notify failed (non-fatal)"
 
     echo "[agent] Done! PR: $PR_URL"
   '';

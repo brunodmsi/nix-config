@@ -184,7 +184,7 @@ in
 
     # Ensure directories exist
     systemd.tmpfiles.rules = [
-      "d ${cfg.configDir} 0750 root root - -"
+      "d ${cfg.configDir} 0755 root root - -"
       "d ${cfg.dataDir} 0750 root root - -"
     ] ++ lib.optionals cfg.playwright.enable [
       "d ${cfg.configDir}/playwright-venv 0750 root root - -"
