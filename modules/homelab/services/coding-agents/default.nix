@@ -9,7 +9,7 @@ let
   homelab = config.homelab;
   cfg = homelab.services.coding-agents;
   dbUrl = "postgresql://openfang@127.0.0.1:5432/openfang";
-  waNotify = "/persist/openfang/scripts/wa-notify.sh";
+  fluzyNotify = "/persist/openfang/scripts/fluzy-notify.sh";
   claudeBin = "${cfg.workspaceDir}/node_modules/.bin/claude";
   wtBin = "${cfg.workspaceDir}/wt/wt.sh";
   promptFile = "/etc/coding-agents/agent-prompt.txt";
@@ -125,7 +125,7 @@ let
       err_msg=$(tail -5 "$TASK_DIR/agent.log" 2>/dev/null | head -c 500 || echo "unknown error")
       err_msg=$(echo "$err_msg" | sed "s/'''/''''/g")
       psql -c "UPDATE coding_tasks SET status='failed', error='$err_msg', updated_at=NOW() WHERE id='$TASK_ID';" "$DB" 2>/dev/null || true
-      ${waNotify} "" "$(printf '❌ *Coding Agent Failed*\nTask: %s\nError: %s' "$TASK_ID" "$(tail -3 "$TASK_DIR/agent.log" 2>/dev/null | head -c 200)")" 2>/dev/null || true
+      ${fluzyNotify} "[SYSTEM] Coding agent task FAILED. Task ID: $TASK_ID. Repo: $(cat "$TASK_DIR/task.json" 2>/dev/null | jq -r '.repo // "unknown"'). Error: $(tail -3 "$TASK_DIR/agent.log" 2>/dev/null | head -c 200). Let the user know what happened and suggest what to do." 2>/dev/null || true
     }
     trap on_error ERR
 
@@ -215,7 +215,7 @@ Review all your changes, fix the issues, improve the code quality, and re-score.
     # Check for actual changes
     if [ -z "$(git diff --name-only)" ] && [ -z "$(git diff --staged --name-only)" ] && [ -z "$(git ls-files --others --exclude-standard)" ]; then
       psql -c "UPDATE coding_tasks SET status='failed', error='No changes produced', score=$SCORE, iterations=$ITERATIONS, updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
-      ${waNotify} "" "$(printf '⚠️ *Coding Agent*: Task %s finished but produced no changes\nScore: %s/10' "$TASK_ID" "$SCORE")"
+      ${fluzyNotify} "[SYSTEM] Coding agent task produced no changes. Task ID: $TASK_ID. Repo: $REPO. Task: $TASK_DESC. Score: $SCORE/10. The agent ran but didn't change any files. Suggest the user rephrase the task or check if it was already done." || true
       exit 0
     fi
 
@@ -292,12 +292,12 @@ _Autonomous coding agent — self-reviewed and scored_"
     # Disable ERR trap — everything after this is best-effort
     trap - ERR
 
-    # Notify via WhatsApp (best-effort, don't fail the task)
-    NOTIFY_MSG="$(printf '🤖 *Coding Agent Done*\n\n*Task*: %s\n*Repo*: %s\n*Score*: %s/10 (%s iterations)\n*PR*: %s' "$TASK_ID" "$REPO" "$SCORE" "$ITERATIONS" "''${PR_URL:-no PR}")"
+    # Notify via Fluzy (best-effort — Fluzy interprets and relays in his own voice)
+    PREVIEW_NOTE=""
     if [ -n "$PREVIEW_URL" ]; then
-      NOTIFY_MSG="$NOTIFY_MSG$(printf '\n*Preview*: %s' "$PREVIEW_URL")"
+      PREVIEW_NOTE="Live preview: $PREVIEW_URL."
     fi
-    ${waNotify} "" "$NOTIFY_MSG" || echo "[agent] wa-notify failed (non-fatal)"
+    ${fluzyNotify} "[SYSTEM] Coding agent task completed. Task ID: $TASK_ID. Repo: $REPO. Task: $TASK_DESC. Score: $SCORE/10 ($ITERATIONS iterations). PR: ''${PR_URL:-no PR}. Summary: $SUMMARY. $PREVIEW_NOTE Inform the user about this. Include the PR link." || echo "[agent] fluzy-notify failed (non-fatal)"
 
     echo "[agent] Done! PR: $PR_URL"
   '';
@@ -747,13 +747,13 @@ in
 
           CREDS="${cfg.workspaceDir}/.claude/.credentials.json"
           if [ ! -f "$CREDS" ]; then
-            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code not authenticated\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
+            /persist/openfang/scripts/wa-notify.sh "" "$(printf '⚠️ *Coding Agents*: Claude Code not authenticated\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
             exit 0
           fi
 
           RESULT=$(timeout 30 ${claudeBin} -p "respond with exactly: OK" --max-turns 1 --output-format text 2>&1 || echo "AUTH_FAILED")
           if echo "$RESULT" | grep -qi "auth\|unauthorized\|login\|credential\|AUTH_FAILED"; then
-            ${waNotify} "" "$(printf '⚠️ *Coding Agents*: Claude Code auth expired\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
+            /persist/openfang/scripts/wa-notify.sh "" "$(printf '⚠️ *Coding Agents*: Claude Code auth expired\nRun on server: CLAUDE_CONFIG_DIR=/persist/coding-agents/.claude claude login')"
           fi
         '';
       };
