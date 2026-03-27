@@ -47,7 +47,7 @@ let
     fi
 
     # Generate task ID
-    TASK_ID="$(date +%Y%m%d-%H%M%S)-$(head -c 4 /dev/urandom | xxd -p)"
+    TASK_ID="$(date +%Y%m%d-%H%M%S)-$(od -An -tx1 -N4 /dev/urandom | tr -d ' \n')"
 
     # Clone repo if not exists
     REPO_DIR="$WORKSPACE/repos/$REPO"
@@ -635,7 +635,7 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "coding-agents-install" ''
-          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.bash}/bin:$PATH
+          export PATH=${pkgs.nodejs_22}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.bash}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin:$PATH
           export HOME=${cfg.workspaceDir}
 
           # Install Claude Code if not present
@@ -649,6 +649,8 @@ in
           if [ ! -f ${wtBin} ]; then
             echo "[install] Installing wt (git worktree manager)..."
             ${pkgs.git}/bin/git clone --depth 1 https://github.com/brunodmsi/wt.git ${cfg.workspaceDir}/wt 2>&1
+            # NixOS has no /bin/bash — patch shebangs to use env
+            ${pkgs.findutils}/bin/find ${cfg.workspaceDir}/wt -name "*.sh" -exec ${pkgs.gnused}/bin/sed -i 's|#!/bin/bash|#!/usr/bin/env bash|' {} \;
             chmod +x ${wtBin}
           fi
 
