@@ -97,7 +97,7 @@ let
     psql -c "INSERT INTO coding_tasks (id, repo, branch, base_branch, task_description, status, log_file) VALUES ('$TASK_ID', '$REPO', '$BRANCH', '$BASE_BRANCH', '$SAFE_TASK', 'queued', '$TASK_DIR/agent.log');" "$DB"
 
     # Start background service
-    sudo systemctl start "coding-agent@$TASK_ID.service" 2>/dev/null &
+    sudo /run/current-system/sw/bin/systemctl start "coding-agent@$TASK_ID.service" &
 
     # Return task info
     ${pkgs.jq}/bin/jq -n \
