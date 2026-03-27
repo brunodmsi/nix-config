@@ -51,7 +51,9 @@ in
     };
 
     # Also available as a script for custom messages from timers/scripts
+    # Scripts dir is 0755 so other services (coding-agents as bmasi) can call wa-notify
     systemd.tmpfiles.rules = [
+      "d /persist/openfang/scripts 0755 root root - -"
       "L+ /persist/openfang/scripts/wa-notify.sh - - - - ${waNotifyScript}"
     ];
   };
