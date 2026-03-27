@@ -22,6 +22,7 @@ let
     WORKSPACE="${cfg.workspaceDir}"
     WT="${wtBin}"
     export HOME="$WORKSPACE"
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
 
     usage() {
       echo "Usage: coding-agent-run --repo OWNER/REPO --task \"description\" [--branch BASE_BRANCH]"
@@ -105,6 +106,7 @@ let
   workerScript = pkgs.writeShellScript "coding-agent-worker" ''
     set -euo pipefail
     export PATH=${pkgs.coreutils}/bin:${pkgs.git}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.nodejs_22}/bin:${pkgs.gh}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:${pkgs.findutils}/bin:${pkgs.procps}/bin:${pkgs.yq-go}/bin:${pkgs.tmux}/bin:$PATH
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
 
     TASK_ID="$1"
     WORKSPACE="${cfg.workspaceDir}"
@@ -299,6 +301,7 @@ _Autonomous coding agent — self-reviewed and scored_"
     WORKSPACE="${cfg.workspaceDir}"
     WT="${wtBin}"
     export HOME="$WORKSPACE"
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
 
     case "''${1:-}" in
       clone)
