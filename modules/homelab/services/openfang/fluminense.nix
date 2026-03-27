@@ -17,14 +17,17 @@ let
     GEMINI_KEY=$(cat ${flu.geminiApiKeyFile})
     TODAY=$(TZ=America/Belem date +"%d/%m/%Y")
     TODAY_ISO=$(TZ=America/Belem date +"%Y-%m-%d")
+    TODAY_SHORT=$(TZ=America/Belem date +"%-d/%-m")
+    TODAY_DAY=$(TZ=America/Belem date +"%-d")
+    TODAY_WEEKDAY=$(TZ=America/Belem date +"%A" | sed 's/Monday/segunda/;s/Tuesday/terça/;s/Wednesday/quarta/;s/Thursday/quinta/;s/Friday/sexta/;s/Saturday/sábado/;s/Sunday/domingo/')
 
-    echo "[flu] Checking Fluminense matchday for $TODAY..."
+    echo "[flu] Checking Fluminense matchday for $TODAY ($TODAY_WEEKDAY)..."
 
-    # Step 1: Search for today's match
+    # Step 1: Search specifically for today's match date
     SEARCH=$(${pkgs.curl}/bin/curl -s --max-time 15 -X POST "https://api.tavily.com/search" \
       -H "Content-Type: application/json" \
       -d '{
-        "query": "Fluminense jogo hoje '"$TODAY"' horario adversario campeonato",
+        "query": "Fluminense jogo '"$TODAY"' '"$TODAY_WEEKDAY"' horario adversario",
         "search_depth": "basic",
         "max_results": 5,
         "include_answer": true
@@ -35,24 +38,44 @@ let
       exit 0
     fi
 
-    # Check if results indicate a match today
     CONTENTS=$(echo "$SEARCH" | ${pkgs.jq}/bin/jq -r '(.answer // "") + " " + ([.results[].content] | join(" "))' 2>/dev/null)
 
-    # Look for patterns indicating a match today: "Fluminense x", "x Fluminense", time patterns like "21h", "19h30"
-    HAS_MATCH=$(echo "$CONTENTS" | ${pkgs.gnugrep}/bin/grep -icP "(fluminense\s*(x|vs|contra)\s)|(\s(x|vs|contra)\s*fluminense)|(\d{1,2}h\d{0,2}.*fluminense)|(fluminense.*\d{1,2}h\d{0,2})" || echo "0")
+    # Step 1b: Also check Fluminense schedule to cross-reference
+    SCHEDULE=$(${pkgs.curl}/bin/curl -s --max-time 15 -X POST "https://api.tavily.com/search" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "query": "Fluminense calendario proximo jogo data março 2026",
+        "search_depth": "basic",
+        "max_results": 3,
+        "include_answer": true
+      }' 2>/dev/null)
 
-    if [ "$HAS_MATCH" -eq 0 ]; then
-      echo "[flu] No Fluminense match today"
+    SCHEDULE_TEXT=$(echo "$SCHEDULE" | ${pkgs.jq}/bin/jq -r '(.answer // "")' 2>/dev/null)
+
+    # Must find today's date (DD/MM or DD/M or just day number near "Fluminense x") in results
+    # This prevents matching results about other dates
+    HAS_DATE=$(echo "$CONTENTS $SCHEDULE_TEXT" | ${pkgs.gnugrep}/bin/grep -icP "(${TODAY_SHORT}|${TODAY}|${TODAY_ISO}).{0,80}(fluminense|flu\b)|(fluminense|flu\b).{0,80}(${TODAY_SHORT}|${TODAY}|${TODAY_ISO})" || echo "0")
+
+    if [ "$HAS_DATE" -eq 0 ]; then
+      echo "[flu] No date match for $TODAY in search results — skipping"
       exit 0
     fi
 
-    echo "[flu] Match detected! Gathering context..."
+    # Also verify there's an actual matchup pattern (not just a news article mentioning the date)
+    HAS_MATCH=$(echo "$CONTENTS" | ${pkgs.gnugrep}/bin/grep -icP "(fluminense\s*(x|vs|contra)\s)|(\s(x|vs|contra)\s*fluminense)|(\d{1,2}h\d{0,2}.*fluminense)|(fluminense.*\d{1,2}h\d{0,2})" || echo "0")
+
+    if [ "$HAS_MATCH" -eq 0 ]; then
+      echo "[flu] No matchup pattern found"
+      exit 0
+    fi
+
+    echo "[flu] Match detected for $TODAY! Gathering context..."
 
     # Step 2: Get more context — opponent form + head-to-head
     CONTEXT_FORM=$(${pkgs.curl}/bin/curl -s --max-time 15 -X POST "https://api.tavily.com/search" \
       -H "Content-Type: application/json" \
       -d '{
-        "query": "Fluminense ultimos jogos resultados '"$TODAY_ISO"'",
+        "query": "Fluminense ultimos jogos resultados 2026",
         "search_depth": "basic",
         "max_results": 3,
         "include_answer": true
@@ -63,7 +86,12 @@ let
     # Step 3: Compose via Gemini
     PROMPT="You are Fluzy, a WhatsApp assistant with Fluminense (Tricolor das Laranjeiras) energy — laid back, carioca, debochado, but PASSIONATE about Flu. You speak with carioca slang (po, mermao, suave, ta ligado, firmeza, caraca).
 
-Based on the following search results about today's Fluminense match, compose a pre-game WhatsApp message for Bruno (a fellow Tricolor). Include:
+CRITICAL TASK: First, determine if Fluminense has a match SPECIFICALLY on $TODAY ($TODAY_WEEKDAY). You must verify the EXACT DATE — not tomorrow, not yesterday, not next week. The match must be on $TODAY.
+
+If there is NO Fluminense match confirmed for EXACTLY $TODAY, respond with ONLY: NO_MATCH
+Do NOT compose a message about matches on other dates. Do NOT assume a match exists. If the date is ambiguous or unclear, respond with NO_MATCH.
+
+ONLY if a match is CONFIRMED for $TODAY ($TODAY_WEEKDAY), compose a pre-game WhatsApp message for Bruno (a fellow Tricolor). Include:
 - The matchup, competition, time, and venue
 - How the opponent has been doing lately
 - Recent head-to-head results if available
@@ -72,13 +100,16 @@ Based on the following search results about today's Fluminense match, compose a 
 
 Use WhatsApp formatting (*bold*, _italic_). Keep it punchy — no walls of text. End with the Hungary flag emoji.
 
-SEARCH RESULTS (today's match):
+SEARCH RESULTS:
 $CONTENTS
+
+SCHEDULE CROSS-REFERENCE:
+$SCHEDULE_TEXT
 
 RECENT FORM:
 $FORM_TEXT
 
-If the search results do NOT actually confirm a Fluminense match TODAY ($TODAY), respond with exactly: NO_MATCH"
+Remember: respond NO_MATCH unless the match is CONFIRMED for exactly $TODAY ($TODAY_WEEKDAY). When in doubt, NO_MATCH."
 
     ESCAPED_PROMPT=$(echo "$PROMPT" | ${pkgs.jq}/bin/jq -Rs .)
 
