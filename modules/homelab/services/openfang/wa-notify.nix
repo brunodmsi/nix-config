@@ -13,8 +13,9 @@ let
 
   routerUrl = "http://127.0.0.1:50052";
 
-  # fluzy-notify: send context to Fluzy's agent, let him interpret and relay to WhatsApp
-  # Falls back to wa-notify if no agent exists yet
+  # fluzy-notify: send context to Fluzy's agent — agent processes and delivers to WhatsApp
+  # OpenFang agent API is async: returns {"status":"accepted"} and delivers response internally
+  # Falls back to wa-notify only if no agent exists yet
   fluzyNotifyScript = pkgs.writeShellScript "fluzy-notify" ''
     export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.postgresql}/bin:${pkgs.gnugrep}/bin:$PATH
 
@@ -26,36 +27,28 @@ let
     REMOTE_JID=$(echo "$AGENT_DATA" | cut -d'|' -f2)
     TO="''${REMOTE_JID:-+559184519877}"
 
-    # Fallback to direct send if no agent spawned yet
+    # Fallback to wa-notify if no agent spawned yet
     if [ -z "$AGENT_ID" ] || ! echo "$AGENT_ID" | grep -qE '^[a-f0-9-]{36}$'; then
-      echo "[fluzy-notify] No agent found, falling back to direct send"
+      echo "[fluzy-notify] No agent found, falling back to wa-notify"
       curl -s -X POST "${gatewayUrl}/message/send" \
         -H "Content-Type: application/json" \
         -d "{\"to\": \"$TO\", \"text\": $(echo "$CONTEXT_MSG" | jq -Rs .)}"
       exit 0
     fi
 
-    # Send context to Fluzy's agent via router (queued + logged)
-    RESPONSE=$(curl -s --max-time 120 -X POST "${routerUrl}/api/agents/$AGENT_ID/message" \
+    # Send context to Fluzy's agent — agent handles WhatsApp delivery async
+    RESULT=$(curl -s --max-time 10 -X POST "${routerUrl}/api/agents/$AGENT_ID/message" \
       -H "Content-Type: application/json" \
       -d "{\"content\": $(echo "$CONTEXT_MSG" | jq -Rs .), \"metadata\": {\"sender\": \"+559184519877\", \"sender_name\": \"System\", \"remote_jid\": \"$REMOTE_JID\"}}")
 
-    # Extract Fluzy's interpreted response
-    MSG=$(echo "$RESPONSE" | jq -r '.response // .content // .message // .' 2>/dev/null)
-
-    # Fallback if agent didn't respond properly
-    if [ -z "$MSG" ] || [ "$MSG" = "null" ] || [ "$MSG" = "" ]; then
-      echo "[fluzy-notify] No response from agent, falling back to direct send"
+    if echo "$RESULT" | jq -e '.status' >/dev/null 2>&1; then
+      echo "[fluzy-notify] Sent to agent $AGENT_ID — Fluzy will deliver"
+    else
+      echo "[fluzy-notify] Agent didn't accept, falling back to wa-notify"
       curl -s -X POST "${gatewayUrl}/message/send" \
         -H "Content-Type: application/json" \
         -d "{\"to\": \"$TO\", \"text\": $(echo "$CONTEXT_MSG" | jq -Rs .)}"
-      exit 0
     fi
-
-    # Send Fluzy's interpreted message to WhatsApp
-    curl -s -X POST "${gatewayUrl}/message/send" \
-      -H "Content-Type: application/json" \
-      -d "{\"to\": \"$TO\", \"text\": $(echo "$MSG" | jq -Rs .)}"
   '';
 
   waNotifyScript = pkgs.writeShellScript "wa-notify" ''
