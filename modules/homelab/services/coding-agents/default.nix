@@ -40,6 +40,9 @@ let
     done
     [ -z "$REPO" ] || [ -z "$TASK" ] && usage
 
+    # Mark stale tasks (stuck >35min) as failed before checking limit
+    psql -c "UPDATE coding_tasks SET status='failed', error='stale (>35min)', updated_at=NOW() WHERE status IN ('queued','running','reviewing','iterating','pushing') AND created_at < NOW() - INTERVAL '35 minutes';" "$DB" 2>/dev/null || true
+
     # Check concurrent limit
     RUNNING=$(psql -t -A -c "SELECT COUNT(*) FROM coding_tasks WHERE status IN ('queued','running','reviewing','iterating','pushing');" "$DB" 2>/dev/null || echo "0")
     if [ "$RUNNING" -ge ${toString cfg.maxConcurrent} ]; then
