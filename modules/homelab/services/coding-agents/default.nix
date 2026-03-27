@@ -70,22 +70,12 @@ let
     cd "$REPO_DIR"
     git fetch origin 2>/dev/null
 
-    # Create worktree via wt
+    # Create worktree (standard git — always reliable)
     BRANCH="agent-$TASK_ID"
-    git checkout -B "$BRANCH" "origin/$BASE_BRANCH" 2>/dev/null
-    git checkout - 2>/dev/null
-    $WT create "$BRANCH" --no-attach --no-setup 2>&1 || true
-
-    # Resolve worktree path (wt puts them in .worktrees/)
-    WORKTREE_DIR="$REPO_DIR/.worktrees/$BRANCH"
-    if [ ! -d "$WORKTREE_DIR" ]; then
-      # Fallback: wt may normalize the path differently
-      WORKTREE_DIR=$(git worktree list --porcelain | grep -A0 "worktree.*$BRANCH" | head -1 | sed 's/worktree //')
-    fi
-
-    # Create task metadata directory
     TASK_DIR="$WORKSPACE/tasks/$TASK_ID"
+    WORKTREE_DIR="$TASK_DIR/worktree"
     mkdir -p "$TASK_DIR"
+    git worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BASE_BRANCH" 2>&1
 
     # Write task.json
     ${pkgs.jq}/bin/jq -n \
