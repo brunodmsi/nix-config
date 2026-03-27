@@ -50,15 +50,6 @@ function uploadToPaperless(base64Data, mimetype, filename, sender) {
       safeName + '\r\n'
     );
 
-    // Tag with sender for traceability
-    if (sender) {
-      parts.push(
-        '--' + boundary + '\r\n' +
-        'Content-Disposition: form-data; name="tags"\r\n\r\n' +
-        'whatsapp-upload\r\n'
-      );
-    }
-
     parts.push('--' + boundary + '--\r\n');
 
     // Combine parts

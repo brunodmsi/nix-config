@@ -48,8 +48,7 @@ let
       -X POST "${paperlessApiUrl}/api/documents/post_document/" \
       -H "Authorization: Token $PAPERLESS_TOKEN" \
       -F "document=@$FILE_PATH" \
-      -F "title=$FILENAME" \
-      -F "tags=whatsapp-upload")
+      -F "title=$FILENAME")
 
     HTTP_CODE=$(echo "$RESULT" | tail -1)
     BODY=$(echo "$RESULT" | head -n -1)
