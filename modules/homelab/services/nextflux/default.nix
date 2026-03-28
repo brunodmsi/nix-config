@@ -45,7 +45,7 @@ in
 
   config = lib.mkIf cfg.enable {
     virtualisation.oci-containers.containers.${service} = {
-      image = "ghcr.io/electh/nextflux:latest";
+      image = "docker.io/electh/nextflux:latest";
       ports = [ "127.0.0.1:${toString hostPort}:${toString containerPort}" ];
       environment = {
         NEXT_PUBLIC_API_ENDPOINT = cfg.minifluxUrl;
