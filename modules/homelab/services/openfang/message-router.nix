@@ -82,7 +82,7 @@ in
         PAPERLESS_API_URL = paperlessApiUrl;
         FFMPEG_PATH = "${pkgs.ffmpeg-headless}/bin/ffmpeg";
         WHISPER_PATH = "${pkgs.whisper-cpp}/bin/whisper-cli";
-        WHISPER_MODEL = "${cfg.configDir}/models/ggml-base.bin";
+        WHISPER_MODEL = "${cfg.configDir}/models/ggml-small.bin";
         LLAMA_MTMD_PATH = "${pkgs.llama-cpp}/bin/llama-mtmd-cli";
         MOONDREAM_REPO = "vikhyatk/moondream2-2025-01-09-gguf";
         HF_HOME = "${cfg.configDir}/models/hf-cache";
@@ -97,10 +97,10 @@ in
           mkdir -p ${cfg.configDir}/models/hf-cache
 
           # Download whisper model if not present
-          if [ ! -f "${cfg.configDir}/models/ggml-base.bin" ]; then
+          if [ ! -f "${cfg.configDir}/models/ggml-small.bin" ]; then
             echo "[router] Downloading whisper base model..."
-            ${pkgs.curl}/bin/curl -fsSL -o "${cfg.configDir}/models/ggml-base.bin" \
-              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+            ${pkgs.curl}/bin/curl -fsSL -o "${cfg.configDir}/models/ggml-small.bin" \
+              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
             echo "[router] Whisper model downloaded"
           fi
 
