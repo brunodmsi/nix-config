@@ -68,7 +68,7 @@ in
       after = [ "openfang.service" "postgresql.service" "openfang-db-init.service" ];
       requires = [ "openfang.service" "postgresql.service" ];
       wantedBy = [ "multi-user.target" ];
-      path = with pkgs; [ bash coreutils curl jq postgresql ffmpeg-headless openai-whisper-cpp ];
+      path = with pkgs; [ bash coreutils curl jq postgresql ffmpeg-headless whisper-cpp ];
       environment = {
         HOME = cfg.configDir;
         ROUTER_PORT = toString routerPort;
@@ -81,7 +81,7 @@ in
         GATEWAY_URL = "http://127.0.0.1:3010";
         PAPERLESS_API_URL = paperlessApiUrl;
         FFMPEG_PATH = "${pkgs.ffmpeg-headless}/bin/ffmpeg";
-        WHISPER_PATH = "${pkgs.openai-whisper-cpp}/bin/whisper-cli";
+        WHISPER_PATH = "${pkgs.whisper-cpp}/bin/whisper-cli";
         WHISPER_MODEL = "${cfg.configDir}/models/ggml-base.bin";
         MEDIA_TMP_DIR = "${cfg.configDir}/media-tmp";
       };
