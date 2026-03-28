@@ -51,6 +51,7 @@ in
         LISTEN_ADDR = "${addr}:${toString port}";
         DATABASE_URL = "user=miniflux host=127.0.0.1 dbname=miniflux sslmode=disable";
       };
+    };
 
     services.caddy.virtualHosts."http://${cfg.url}" = {
       extraConfig = ''
