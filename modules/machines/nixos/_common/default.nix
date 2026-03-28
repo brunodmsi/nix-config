@@ -57,6 +57,7 @@
     gpush = "GIT_SSH_COMMAND='ssh -i /persist/ssh/ssh_host_ed25519_key' git push";
     gpull = "GIT_SSH_COMMAND='ssh -i /persist/ssh/ssh_host_ed25519_key' git pull";
     rebuild = "cd /etc/nixos && sudo gpull && sudo nixos-rebuild switch --flake /etc/nixos#sweet";
+    age-edit = "cd /tmp/nix-secrets && sudo GIT_SSH_COMMAND='ssh -i /persist/ssh/ssh_host_ed25519_key' git pull && sudo EDITOR=nano nix run github:ryantm/agenix -- -e";
   };
 
   environment.systemPackages = with pkgs; [
