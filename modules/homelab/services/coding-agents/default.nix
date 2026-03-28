@@ -164,6 +164,9 @@ let
     echo "[agent] Model: ${cfg.model} | Max turns: ${toString cfg.maxTurns}"
     echo "[agent] $(date '+%H:%M:%S') Starting implementation..."
 
+    # Clean stale result files
+    rm -f .agent-result.json "$TASK_DIR/claude-result.json" "$TASK_DIR/claude-stream.log"
+
     # Phase 1: Implement
     IMPLEMENT_PROMPT="Your task: $TASK_DESC
 
@@ -180,7 +183,6 @@ Score guide: 9-10 production-ready, 7-8 good with minor issues, 5-6 functional b
       --append-system-prompt "$(cat "$PROMPT_FILE")" \
       --output-format stream-json \
       --verbose \
-      --bare \
       2>&1 | tee "$TASK_DIR/claude-stream.log" | while IFS= read -r line; do
         # Fast type check without jq
         case "$line" in
@@ -227,8 +229,7 @@ Review all your changes, fix the issues, improve the code quality, and re-score.
         --append-system-prompt "$(cat "$PROMPT_FILE")" \
         --output-format stream-json \
         --verbose \
-        --bare \
-        2>&1 | tee -a "$TASK_DIR/claude-stream.log" | while IFS= read -r line; do
+          2>&1 | tee -a "$TASK_DIR/claude-stream.log" | while IFS= read -r line; do
           case "$line" in
             *'"type":"assistant"'*)
               TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
