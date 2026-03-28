@@ -42,6 +42,7 @@
           "http://prometheus.demasi.dev"
           "http://agent.demasi.dev"
           "http://news.demasi.dev"
+          "http://reader.demasi.dev"
         ];
         oidc = {
           enable = true;
@@ -91,6 +92,7 @@
         enable = true;
         adminCredentialsFile = config.age.secrets.minifluxAdminPassword.path;
       };
+      nextflux.enable = true;
       # AI Agent
       openfang = {
         enable = true;

@@ -107,6 +107,7 @@ in
         enable = true;
         adminCredentialsFile = config.age.secrets.minifluxAdminPassword.path;
       };
+      nextflux.enable = true;
       uptime-kuma.enable = true;
       deluge.enable = true;
       wireguard-netns.enable = false;

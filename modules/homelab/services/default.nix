@@ -94,6 +94,7 @@ in
     ./jellyfin
     ./microbin
     ./miniflux
+    ./nextflux
     ./monitoring/prometheus
     ./monitoring/grafana
     ./nextcloud
