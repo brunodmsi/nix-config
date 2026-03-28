@@ -88,7 +88,7 @@ in
       };
       settings = {
         overwriteprotocol = "https";
-        overwritecliurl = "https://${cfg.url}";
+        "overwrite.cli.url" = "https://${cfg.url}";
         default_phone_region = "BR";
         trusted_proxies = [ "127.0.0.1" ];
         trusted_domains = [ cfg.url ];
