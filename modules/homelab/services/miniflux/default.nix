@@ -7,19 +7,17 @@ let
   service = "miniflux";
   hl = config.homelab;
   cfg = hl.services.${service};
+  addr = "127.0.0.1";
+  port = 8067;
 in
 {
   options.homelab.services.${service} = {
     enable = lib.mkEnableOption {
       description = "Enable ${service}";
     };
-    configDir = lib.mkOption {
-      type = lib.types.str;
-      default = "/var/lib/${service}";
-    };
     url = lib.mkOption {
       type = lib.types.str;
-      default = "news.demasi.dev";
+      default = "news.${hl.baseDomain}";
     };
     homepage.name = lib.mkOption {
       type = lib.types.str;
@@ -38,60 +36,26 @@ in
       default = "Services";
     };
     adminCredentialsFile = lib.mkOption {
-      description = "File with admin credentials";
+      description = "File with admin credentials (ADMIN_USERNAME=x\\nADMIN_PASSWORD=y)";
       type = lib.types.path;
     };
-    role = lib.mkOption {
-      type = lib.types.enum [
-        "client"
-        "server"
-      ];
-      default = "client";
+  };
+
+  config = lib.mkIf cfg.enable {
+    services.${service} = {
+      enable = true;
+      adminCredentialsFile = cfg.adminCredentialsFile;
+      config = {
+        BASE_URL = "https://${cfg.url}";
+        CREATE_ADMIN = true;
+        LISTEN_ADDR = "${addr}:${toString port}";
+      };
+    };
+
+    services.caddy.virtualHosts."http://${cfg.url}" = {
+      extraConfig = ''
+        reverse_proxy http://${addr}:${toString port}
+      '';
     };
   };
-  config =
-    let
-      mkIfElse =
-        p: yes: no:
-        lib.mkMerge [
-          (lib.mkIf p yes)
-          (lib.mkIf (!p) no)
-        ];
-      addr = "127.0.0.1";
-      port = 8067;
-    in
-    mkIfElse (cfg.role == "client")
-      (lib.mkIf cfg.enable {
-        services.${service} = {
-          enable = true;
-          adminCredentialsFile = cfg.adminCredentialsFile;
-          config = {
-            BASE_URL = "https://${cfg.url}";
-            CREATE_ADMIN = true;
-            LISTEN_ADDR = "${addr}:${toString port}";
-            OAUTH2_PROVIDER = "oidc";
-            OAUTH2_CLIENT_ID = "miniflux";
-            OAUTH2_REDIRECT_URL = "https://${cfg.url}/oauth2/oidc/callback";
-            OAUTH2_OIDC_DISCOVERY_ENDPOINT = "https://${hl.services.keycloak.url}/realms/master";
-            OAUTH2_USER_CREATION = "1";
-            DISABLE_LOCAL_AUTH = "true";
-          };
-        };
-        services.frp.settings.proxies = [
-          {
-            name = service;
-            type = "tcp";
-            localIP = addr;
-            localPort = port;
-            remotePort = port;
-          }
-        ];
-      })
-      {
-        services.caddy.virtualHosts."http://${cfg.url}" = {
-          extraConfig = ''
-            reverse_proxy http://${addr}:${toString port}
-          '';
-        };
-      };
 }

@@ -41,6 +41,7 @@
           "http://grafana.demasi.dev"
           "http://prometheus.demasi.dev"
           "http://agent.demasi.dev"
+          "http://news.demasi.dev"
         ];
         oidc = {
           enable = true;
@@ -84,6 +85,11 @@
       paperless = {
         enable = true;
         passwordFile = config.age.secrets.paperlessPassword.path;
+      };
+      # RSS Reader
+      miniflux = {
+        enable = true;
+        adminCredentialsFile = config.age.secrets.minifluxAdminPassword.path;
       };
       # AI Agent
       openfang = {
