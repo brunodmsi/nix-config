@@ -1,5 +1,5 @@
 # Per-sender agent router — routes WhatsApp messages to per-user OpenFang agents
-# Includes media handling: Paperless upload for documents, Gemini transcription for audio
+# Includes media handling: Paperless upload for documents, local whisper for audio, Gemini vision for images
 {
   config,
   lib,
@@ -68,7 +68,7 @@ in
       after = [ "openfang.service" "postgresql.service" "openfang-db-init.service" ];
       requires = [ "openfang.service" "postgresql.service" ];
       wantedBy = [ "multi-user.target" ];
-      path = with pkgs; [ bash coreutils curl jq postgresql ffmpeg-headless ];
+      path = with pkgs; [ bash coreutils curl jq postgresql ffmpeg-headless openai-whisper-cpp ];
       environment = {
         HOME = cfg.configDir;
         ROUTER_PORT = toString routerPort;
@@ -81,11 +81,23 @@ in
         GATEWAY_URL = "http://127.0.0.1:3010";
         PAPERLESS_API_URL = paperlessApiUrl;
         FFMPEG_PATH = "${pkgs.ffmpeg-headless}/bin/ffmpeg";
+        WHISPER_PATH = "${pkgs.openai-whisper-cpp}/bin/whisper-cli";
+        WHISPER_MODEL = "${cfg.configDir}/models/ggml-base.bin";
         MEDIA_TMP_DIR = "${cfg.configDir}/media-tmp";
       };
       serviceConfig = {
         ExecStartPre = pkgs.writeShellScript "router-load-secrets" ''
+          export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin:$PATH
           mkdir -p ${cfg.configDir}/media-tmp
+          mkdir -p ${cfg.configDir}/models
+
+          # Download whisper model if not present
+          if [ ! -f "${cfg.configDir}/models/ggml-base.bin" ]; then
+            echo "[router] Downloading whisper base model..."
+            ${pkgs.curl}/bin/curl -fsSL -o "${cfg.configDir}/models/ggml-base.bin" \
+              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+            echo "[router] Whisper model downloaded"
+          fi
         '';
         ExecStart = pkgs.writeShellScript "openfang-router-run" ''
           ${lib.optionalString plCfg.enable ''

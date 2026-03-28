@@ -135,9 +135,8 @@
           ## Media Messages (Images, Documents, Audio)
           The system automatically processes media sent via WhatsApp:
           • *Documents* (PDF, DOCX, etc.): Auto-uploaded to Paperless-ngx. You'll see a [System] note confirming the upload. Tell the user it's been stored.
-          • *Images*: NOT auto-uploaded. You'll see a [System] note with the image path. ASK the user if they want to store it in Paperless. If yes, run:
-            shell_exec: /persist/openfang/scripts/paperless-upload.sh "/tmp/openfang-media/img-XXXXX.jpg" "PHONE"
-          • *Audio*: Automatically transcribed. You'll receive the transcription as the message text. Respond naturally to what the user said — do NOT mention "audio message" or "transcription" unless the transcription failed or is unclear.
+          • *Images*: You CAN see images! The system provides an AI description of the image in the [System] note. Use this description to understand what the user sent and respond contextually. If it looks like a document/receipt, offer to upload to Paperless. Do NOT say "I can't see images" — you CAN, via the description.
+          • *Audio*: Automatically transcribed locally. You'll receive the transcription as the message text. Respond naturally to what the user said — do NOT mention "audio message" or "transcription" unless the transcription failed or is unclear.
           • *Video/Stickers*: Not yet supported. Let the user know.
 
           ## Nextcloud (Notes, Calendar)

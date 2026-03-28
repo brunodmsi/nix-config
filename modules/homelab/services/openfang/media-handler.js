@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Media handler for WhatsApp messages:
 // - Documents: auto-upload to Paperless-ngx
-// - Images: pass through for Fluzy to ask user
-// - Audio: transcribe via Gemini API
+// - Images: describe via Gemini vision + offer Paperless upload
+// - Audio: transcribe locally via whisper-cpp
 // - Video/Sticker: acknowledge receipt
 
 import fs from 'node:fs';
@@ -16,6 +16,8 @@ const PAPERLESS_API_TOKEN = process.env.PAPERLESS_API_TOKEN || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const MEDIA_TMP_DIR = process.env.MEDIA_TMP_DIR || '/persist/openfang/media-tmp';
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+const WHISPER_PATH = process.env.WHISPER_PATH || 'whisper-cli';
+const WHISPER_MODEL = process.env.WHISPER_MODEL || '/persist/openfang/models/ggml-base.bin';
 
 // Ensure tmp dir exists
 try { fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true }); } catch {}
@@ -26,15 +28,12 @@ function uploadToPaperless(base64Data, mimetype, filename, sender) {
   return new Promise((resolve, reject) => {
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // Determine filename
     const ext = mimeToExt(mimetype);
     const safeName = filename || ('whatsapp-' + Date.now() + ext);
 
-    // Build multipart form data
     const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
     const parts = [];
 
-    // Document file
     parts.push(
       '--' + boundary + '\r\n' +
       'Content-Disposition: form-data; name="document"; filename="' + safeName + '"\r\n' +
@@ -43,7 +42,6 @@ function uploadToPaperless(base64Data, mimetype, filename, sender) {
     parts.push(buffer);
     parts.push('\r\n');
 
-    // Title
     parts.push(
       '--' + boundary + '\r\n' +
       'Content-Disposition: form-data; name="title"\r\n\r\n' +
@@ -52,7 +50,6 @@ function uploadToPaperless(base64Data, mimetype, filename, sender) {
 
     parts.push('--' + boundary + '--\r\n');
 
-    // Combine parts
     const bodyParts = parts.map(p => typeof p === 'string' ? Buffer.from(p) : p);
     const body = Buffer.concat(bodyParts);
 
@@ -94,33 +91,60 @@ function uploadToPaperless(base64Data, mimetype, filename, sender) {
   });
 }
 
-// --- Audio transcription via Gemini ---
+// --- Audio transcription via local whisper-cpp ---
 
 function transcribeAudio(base64Data, mimetype) {
-  return new Promise((resolve, reject) => {
+  try {
+    // Check if whisper model exists
+    if (!fs.existsSync(WHISPER_MODEL)) {
+      console.error('[media] Whisper model not found at ' + WHISPER_MODEL);
+      return { success: false, error: 'Whisper model not available' };
+    }
+
+    // Save audio to temp file
+    const tmpIn = path.join(MEDIA_TMP_DIR, 'audio-' + Date.now() + '.ogg');
+    const tmpWav = path.join(MEDIA_TMP_DIR, 'audio-' + Date.now() + '.wav');
+    fs.writeFileSync(tmpIn, Buffer.from(base64Data, 'base64'));
+
+    // Convert to 16kHz mono WAV (required by whisper-cpp)
+    execSync(FFMPEG_PATH + ' -i ' + tmpIn + ' -y -ar 16000 -ac 1 -c:a pcm_s16le ' + tmpWav + ' 2>/dev/null', {
+      timeout: 30000,
+    });
+    try { fs.unlinkSync(tmpIn); } catch {}
+
+    // Run whisper-cli
+    const output = execSync(
+      WHISPER_PATH + ' -m ' + WHISPER_MODEL + ' -l auto -np -nt -f ' + tmpWav,
+      { encoding: 'utf8', timeout: 120000 }
+    );
+    try { fs.unlinkSync(tmpWav); } catch {}
+
+    // Parse output — whisper-cli outputs text lines, strip timestamps if present
+    const text = output
+      .split('\n')
+      .map(l => l.replace(/^\[.*?\]\s*/, '').trim())
+      .filter(l => l)
+      .join(' ')
+      .trim();
+
+    if (text) {
+      console.log('[media] Audio transcribed locally (' + text.length + ' chars)');
+      return { success: true, transcription: text };
+    }
+    return { success: false, error: 'Whisper returned empty output' };
+  } catch (e) {
+    console.error('[media] Whisper transcription error:', e.message);
+    return { success: false, error: 'Transcription failed: ' + e.message };
+  }
+}
+
+// --- Image description via Gemini vision ---
+
+function describeImage(base64Data, mimetype) {
+  return new Promise((resolve) => {
     if (!GEMINI_API_KEY) {
       resolve({ success: false, error: 'No GEMINI_API_KEY configured' });
       return;
-    }
-
-    // Convert ogg/opus to mp3 via ffmpeg for better compatibility
-    let audioBase64 = base64Data;
-    let audioMime = mimetype;
-
-    if (mimetype.includes('ogg') || mimetype.includes('opus')) {
-      try {
-        const tmpIn = path.join(MEDIA_TMP_DIR, 'audio-' + Date.now() + '.ogg');
-        const tmpOut = path.join(MEDIA_TMP_DIR, 'audio-' + Date.now() + '.mp3');
-        fs.writeFileSync(tmpIn, Buffer.from(base64Data, 'base64'));
-        execSync(FFMPEG_PATH + ' -i ' + tmpIn + ' -y -q:a 2 ' + tmpOut + ' 2>/dev/null', { timeout: 15000 });
-        audioBase64 = fs.readFileSync(tmpOut).toString('base64');
-        audioMime = 'audio/mp3';
-        try { fs.unlinkSync(tmpIn); } catch {}
-        try { fs.unlinkSync(tmpOut); } catch {}
-      } catch (e) {
-        console.error('[media] ffmpeg conversion failed:', e.message);
-        // Fall back to original format
-      }
     }
 
     const payload = JSON.stringify({
@@ -128,18 +152,18 @@ function transcribeAudio(base64Data, mimetype) {
         parts: [
           {
             inline_data: {
-              mime_type: audioMime,
-              data: audioBase64,
+              mime_type: mimetype,
+              data: base64Data,
             }
           },
           {
-            text: "Transcribe this audio message exactly as spoken. If the language is not English, transcribe in the original language. Return ONLY the transcription, nothing else."
+            text: "Describe this image briefly and objectively in 1-2 sentences. Focus on what's in the image: objects, text, people, scenes. If there's text in the image, include it. If it's a screenshot, describe what it shows. If it's a receipt or document, extract the key information. Respond in the same language as any text in the image, or in Portuguese if no text is visible."
           }
         ]
       }],
       generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 2048,
+        temperature: 0.2,
+        maxOutputTokens: 300,
       }
     });
 
@@ -151,7 +175,7 @@ function transcribeAudio(base64Data, mimetype) {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
       },
-      timeout: 60000,
+      timeout: 30000,
     }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -160,21 +184,21 @@ function transcribeAudio(base64Data, mimetype) {
           const parsed = JSON.parse(data);
           const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
           if (text) {
-            console.log('[media] Audio transcribed (' + text.length + ' chars)');
-            resolve({ success: true, transcription: text.trim() });
+            console.log('[media] Image described (' + text.length + ' chars)');
+            resolve({ success: true, description: text.trim() });
           } else {
-            console.error('[media] Gemini response missing text:', data.slice(0, 200));
-            resolve({ success: false, error: 'No transcription in response' });
+            console.error('[media] Gemini vision response missing text:', data.slice(0, 200));
+            resolve({ success: false, error: 'No description in response' });
           }
         } catch (e) {
-          console.error('[media] Gemini parse error:', e.message);
-          resolve({ success: false, error: 'Failed to parse Gemini response' });
+          console.error('[media] Gemini vision parse error:', e.message);
+          resolve({ success: false, error: 'Failed to parse response' });
         }
       });
     });
 
     req.on('error', (e) => {
-      console.error('[media] Gemini request error:', e.message);
+      console.error('[media] Gemini vision error:', e.message);
       resolve({ success: false, error: e.message });
     });
 
@@ -261,28 +285,29 @@ export async function processMedia(parsed) {
     }
   }
 
-  // --- IMAGE: pass info to Fluzy, let it ask the user ---
+  // --- IMAGE: describe via Gemini vision + offer Paperless upload ---
   if (mediaType === 'image') {
-    // Save temporarily so Fluzy could reference it if needed
     const ext = mimeToExt(mediaMime) || '.jpg';
     const tmpFile = path.join(MEDIA_TMP_DIR, 'img-' + Date.now() + ext);
     try {
       fs.writeFileSync(tmpFile, Buffer.from(mediaBase64, 'base64'));
     } catch {}
 
+    // Get AI description of the image
+    const vision = await describeImage(mediaBase64, mediaMime);
+    const description = vision.success ? vision.description : 'Could not analyze image';
+
     return {
-      contentPrefix: '[System: User sent an image (' + mediaMime + ', ' + sizeKB + ' KB). The image is saved at ' + tmpFile + '. Ask the user if they want to upload it to Paperless-ngx for storage. If they say yes, use shell_exec to run: /persist/openfang/scripts/paperless-upload.sh "' + tmpFile + '" "' + (sender || '') + '"]',
+      contentPrefix: '[System: User sent an image (' + mediaMime + ', ' + sizeKB + ' KB). AI description: "' + description.replace(/"/g, "'").slice(0, 300) + '". The image is saved at ' + tmpFile + '. Respond based on the image context — you can SEE what the image shows via the description above. If it looks like a document/receipt, offer to upload to Paperless: /persist/openfang/scripts/paperless-upload.sh "' + tmpFile + '" "' + (sender || '') + '"]',
       stripMedia: true,
     };
   }
 
-  // --- AUDIO: transcribe via Gemini ---
+  // --- AUDIO: transcribe locally via whisper-cpp ---
   if (mediaType === 'audio') {
-    const result = await transcribeAudio(mediaBase64, mediaMime);
+    const result = transcribeAudio(mediaBase64, mediaMime);
 
     if (result.success) {
-      // Transcription is user-controlled content — use as contentOverride only,
-      // not embedded in [System:] context to avoid prompt injection
       return {
         contentOverride: result.transcription,
         stripMedia: true,
