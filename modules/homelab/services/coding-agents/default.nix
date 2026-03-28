@@ -157,7 +157,8 @@ let
     echo "[agent] Task $TASK_ID: $TASK_DESC"
     echo "[agent] Repo: $REPO | Branch: $BRANCH | Base: $BASE_BRANCH"
     echo "[agent] Worktree: $WORKTREE_DIR"
-    echo "[agent] Starting implementation..."
+    echo "[agent] Model: ${cfg.model} | Max turns: ${toString cfg.maxTurns}"
+    echo "[agent] $(date '+%H:%M:%S') Starting implementation..."
 
     # Phase 1: Implement
     IMPLEMENT_PROMPT="Your task: $TASK_DESC
@@ -167,13 +168,25 @@ After completing the implementation, write a file called .agent-result.json at t
 
 Score guide: 9-10 production-ready, 7-8 good with minor issues, 5-6 functional but needs work, 1-4 incomplete."
 
+    echo "[agent] $(date '+%H:%M:%S') Calling Claude Code (${cfg.model})..."
     $CLAUDE -p "$IMPLEMENT_PROMPT" \
       --dangerously-skip-permissions \
       --model ${cfg.model} \
       --max-turns ${toString cfg.maxTurns} \
       --system-prompt-file "$PROMPT_FILE" \
-      --output-format json \
-      2>&1 || true
+      --output-format stream-json \
+      --verbose \
+      2>&1 | while IFS= read -r line; do
+        # Log tool use events for visibility
+        TYPE=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+        if [ "$TYPE" = "assistant" ]; then
+          TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
+          [ -n "$TOOL" ] && echo "[agent] $(date '+%H:%M:%S') Using tool: $TOOL"
+        elif [ "$TYPE" = "result" ]; then
+          echo "$line" > "$TASK_DIR/claude-result.json"
+          echo "[agent] $(date '+%H:%M:%S') Claude finished ($(echo "$line" | jq -r '.duration_ms // 0' 2>/dev/null)ms, $(echo "$line" | jq -r '.num_turns // 0' 2>/dev/null) turns)"
+        fi
+      done || true
 
     # Parse result
     SCORE=0
@@ -185,7 +198,7 @@ Score guide: 9-10 production-ready, 7-8 good with minor issues, 5-6 functional b
       ISSUES=$(jq -r '.issues // [] | join("; ")' .agent-result.json 2>/dev/null || echo "")
     fi
 
-    echo "[agent] Phase 1 complete. Score: $SCORE/10"
+    echo "[agent] $(date '+%H:%M:%S') Phase 1 complete. Score: $SCORE/10"
 
     # Iteration loop
     ITERATIONS=0
@@ -193,19 +206,30 @@ Score guide: 9-10 production-ready, 7-8 good with minor issues, 5-6 functional b
       ITERATIONS=$((ITERATIONS + 1))
       psql -c "UPDATE coding_tasks SET status='iterating', iterations=$ITERATIONS, score=$SCORE, updated_at=NOW() WHERE id='$TASK_ID';" "$DB"
 
-      echo "[agent] Score $SCORE < ${toString cfg.scoreThreshold}, iterating ($ITERATIONS/${toString cfg.maxIterations})..."
+      echo "[agent] $(date '+%H:%M:%S') Score $SCORE < ${toString cfg.scoreThreshold}, iterating ($ITERATIONS/${toString cfg.maxIterations})..."
 
       IMPROVE_PROMPT="Your previous implementation scored $SCORE/10. Issues found: $ISSUES
 
 Review all your changes, fix the issues, improve the code quality, and re-score. Update .agent-result.json with the new score."
 
+      echo "[agent] $(date '+%H:%M:%S') Calling Claude Code (${cfg.model}, iteration)..."
       $CLAUDE -p "$IMPROVE_PROMPT" \
         --dangerously-skip-permissions \
         --model ${cfg.model} \
         --max-turns $((${toString cfg.maxTurns} / 2)) \
         --system-prompt-file "$PROMPT_FILE" \
-        --output-format json \
-        2>&1 || true
+        --output-format stream-json \
+        --verbose \
+        2>&1 | while IFS= read -r line; do
+          TYPE=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+          if [ "$TYPE" = "assistant" ]; then
+            TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
+            [ -n "$TOOL" ] && echo "[agent] $(date '+%H:%M:%S') Using tool: $TOOL"
+          elif [ "$TYPE" = "result" ]; then
+            echo "$line" > "$TASK_DIR/claude-result.json"
+            echo "[agent] $(date '+%H:%M:%S') Claude finished ($(echo "$line" | jq -r '.duration_ms // 0' 2>/dev/null)ms)"
+          fi
+        done || true
 
       if [ -f ".agent-result.json" ]; then
         SCORE=$(jq -r '.score // 0' .agent-result.json 2>/dev/null || echo "0")
@@ -424,10 +448,12 @@ _Autonomous coding agent — self-reviewed and scored_"
         ;;
       logs)
         TASK_ID="$2"
-        [ -z "$TASK_ID" ] && echo "Usage: coding-tasks logs TASK_ID [--tail N]" && exit 1
+        [ -z "$TASK_ID" ] && echo "Usage: coding-tasks logs TASK_ID [-f|--tail N]" && exit 1
         LOG_FILE="$WORKSPACE/tasks/$TASK_ID/agent.log"
-        TAIL_N="''${4:-50}"
-        if [ "''${3:-}" = "--tail" ]; then
+        if [ "''${3:-}" = "-f" ]; then
+          exec tail -f "$LOG_FILE"
+        elif [ "''${3:-}" = "--tail" ]; then
+          TAIL_N="''${4:-50}"
           tail -n "$TAIL_N" "$LOG_FILE" 2>/dev/null || echo "No log file found"
         else
           tail -n 50 "$LOG_FILE" 2>/dev/null || echo "No log file found"
