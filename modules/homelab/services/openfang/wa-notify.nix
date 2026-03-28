@@ -21,18 +21,20 @@ let
 
     CONTEXT_MSG="$1"
 
-    # Look up Bruno's agent_id and remote_jid
-    AGENT_DATA=$(psql -t -A -c "SELECT agent_id || '|' || COALESCE(remote_jid, '''') FROM channel_users WHERE channel_user_id LIKE '%559184519877%' LIMIT 1;" "${dbUrl}" 2>/dev/null)
-    AGENT_ID=$(echo "$AGENT_DATA" | cut -d'|' -f1)
-    REMOTE_JID=$(echo "$AGENT_DATA" | cut -d'|' -f2)
+    # Clean fallback message: strip [SYSTEM] prefix and LLM instructions
+    CLEAN_MSG=$(echo "$CONTEXT_MSG" | sed 's/^\[SYSTEM\] //' | sed 's/ Inform the user.*//;s/ Let the user know.*//;s/ Suggest the user.*//')
+
+    # Look up Bruno's agent_id and remote_jid (COALESCE prevents NULL from killing concat)
+    AGENT_ID=$(psql -t -A -c "SELECT COALESCE(agent_id, '''') FROM channel_users WHERE channel_user_id LIKE '%559184519877%' LIMIT 1;" "${dbUrl}" 2>/dev/null)
+    REMOTE_JID=$(psql -t -A -c "SELECT COALESCE(remote_jid, '''') FROM channel_users WHERE channel_user_id LIKE '%559184519877%' LIMIT 1;" "${dbUrl}" 2>/dev/null)
     TO="''${REMOTE_JID:-+559184519877}"
 
-    # Fallback to wa-notify if no agent spawned yet
+    # Fallback to clean direct send if no agent spawned yet
     if [ -z "$AGENT_ID" ] || ! echo "$AGENT_ID" | grep -qE '^[a-f0-9-]{36}$'; then
-      echo "[fluzy-notify] No agent found, falling back to wa-notify"
+      echo "[fluzy-notify] No agent found, sending clean fallback"
       curl -s -X POST "${gatewayUrl}/message/send" \
         -H "Content-Type: application/json" \
-        -d "{\"to\": \"$TO\", \"text\": $(echo "$CONTEXT_MSG" | jq -Rs .)}"
+        -d "{\"to\": \"$TO\", \"text\": $(echo "$CLEAN_MSG" | jq -Rs .)}"
       exit 0
     fi
 
@@ -44,10 +46,10 @@ let
     if echo "$RESULT" | jq -e '.status' >/dev/null 2>&1; then
       echo "[fluzy-notify] Sent to agent $AGENT_ID — Fluzy will deliver"
     else
-      echo "[fluzy-notify] Agent didn't accept, falling back to wa-notify"
+      echo "[fluzy-notify] Agent didn't accept, sending clean fallback"
       curl -s -X POST "${gatewayUrl}/message/send" \
         -H "Content-Type: application/json" \
-        -d "{\"to\": \"$TO\", \"text\": $(echo "$CONTEXT_MSG" | jq -Rs .)}"
+        -d "{\"to\": \"$TO\", \"text\": $(echo "$CLEAN_MSG" | jq -Rs .)}"
     fi
   '';
 
