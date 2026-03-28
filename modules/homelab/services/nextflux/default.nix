@@ -8,7 +8,8 @@ let
   hl = config.homelab;
   cfg = hl.services.${service};
   minifluxCfg = hl.services.miniflux;
-  port = 3000;
+  containerPort = 3000;
+  hostPort = 3002;
 in
 {
   options.homelab.services.${service} = {
@@ -45,7 +46,7 @@ in
   config = lib.mkIf cfg.enable {
     virtualisation.oci-containers.containers.${service} = {
       image = "ghcr.io/electh/nextflux:latest";
-      ports = [ "127.0.0.1:${toString port}:${toString port}" ];
+      ports = [ "127.0.0.1:${toString hostPort}:${toString containerPort}" ];
       environment = {
         NEXT_PUBLIC_API_ENDPOINT = cfg.minifluxUrl;
       };
@@ -56,7 +57,7 @@ in
 
     services.caddy.virtualHosts."http://${cfg.url}" = {
       extraConfig = ''
-        reverse_proxy http://127.0.0.1:${toString port}
+        reverse_proxy http://127.0.0.1:${toString hostPort}
       '';
     };
   };
