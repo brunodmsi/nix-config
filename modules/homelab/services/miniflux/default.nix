@@ -49,8 +49,14 @@ in
         BASE_URL = "https://${cfg.url}";
         CREATE_ADMIN = true;
         LISTEN_ADDR = "${addr}:${toString port}";
+        DATABASE_URL = "user=miniflux host=/run/postgresql dbname=miniflux sslmode=disable";
       };
     };
+
+    # Ensure miniflux can connect to PostgreSQL via peer auth
+    services.postgresql.authentication = lib.mkAfter ''
+      local miniflux miniflux peer
+    '';
 
     services.caddy.virtualHosts."http://${cfg.url}" = {
       extraConfig = ''
