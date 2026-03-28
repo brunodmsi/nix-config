@@ -62,7 +62,7 @@ echo ""
 # --- World News ---
 echo ">> World News"
 CID=$(create_category "World News")
-add_feed "$CID" "https://apnews.com/world-news.rss"
+add_feed "$CID" "https://www.reuters.com/arc/outboundfeeds/v3/all/rss.xml"
 add_feed "$CID" "https://feeds.bbci.co.uk/news/world/rss.xml"
 add_feed "$CID" "https://theconversation.com/global/articles.atom"
 add_feed "$CID" "https://www.theguardian.com/world/rss"
