@@ -18,6 +18,9 @@ const MEDIA_TMP_DIR = process.env.MEDIA_TMP_DIR || '/persist/openfang/media-tmp'
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 const WHISPER_PATH = process.env.WHISPER_PATH || 'whisper-cli';
 const WHISPER_MODEL = process.env.WHISPER_MODEL || '/persist/openfang/models/ggml-base.bin';
+const LLAMA_MTMD_PATH = process.env.LLAMA_MTMD_PATH || 'llama-mtmd-cli';
+const MOONDREAM_REPO = process.env.MOONDREAM_REPO || 'vikhyatk/moondream2-2025-01-09-gguf';
+const HF_HOME = process.env.HF_HOME || '/persist/openfang/models/hf-cache';
 
 // Ensure tmp dir exists
 try { fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true }); } catch {}
@@ -138,9 +141,35 @@ function transcribeAudio(base64Data, mimetype) {
   }
 }
 
-// --- Image description via Gemini vision ---
+// --- Image description via local moondream2 (Gemini fallback) ---
 
-function describeImage(base64Data, mimetype) {
+function describeImageLocal(imagePath, prompt) {
+  try {
+    const output = execSync(
+      LLAMA_MTMD_PATH + ' -hf ' + MOONDREAM_REPO +
+      ' --image ' + imagePath +
+      ' -p "' + prompt.replace(/"/g, '\\"') + '"' +
+      ' -n 200 --temp 0.1 2>/dev/null',
+      {
+        encoding: 'utf8',
+        timeout: 120000,
+        env: { ...process.env, HF_HOME },
+      }
+    );
+    // llama-mtmd-cli outputs the response after the prompt
+    const text = output.trim();
+    if (text) {
+      console.log('[media] Image described locally (' + text.length + ' chars)');
+      return { success: true, description: text };
+    }
+    return { success: false, error: 'Empty output from moondream2' };
+  } catch (e) {
+    console.error('[media] Local vision error:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+function describeImageGemini(base64Data, mimetype, prompt) {
   return new Promise((resolve) => {
     if (!GEMINI_API_KEY) {
       resolve({ success: false, error: 'No GEMINI_API_KEY configured' });
@@ -150,21 +179,11 @@ function describeImage(base64Data, mimetype) {
     const payload = JSON.stringify({
       contents: [{
         parts: [
-          {
-            inline_data: {
-              mime_type: mimetype,
-              data: base64Data,
-            }
-          },
-          {
-            text: "Describe this image briefly and objectively in 1-2 sentences. Focus on what's in the image: objects, text, people, scenes. If there's text in the image, include it. If it's a screenshot, describe what it shows. If it's a receipt or document, extract the key information. Respond in the same language as any text in the image, or in Portuguese if no text is visible."
-          }
+          { inline_data: { mime_type: mimetype, data: base64Data } },
+          { text: prompt }
         ]
       }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 300,
-      }
+      generationConfig: { temperature: 0.2, maxOutputTokens: 300 }
     });
 
     const req = https.request({
@@ -184,27 +203,34 @@ function describeImage(base64Data, mimetype) {
           const parsed = JSON.parse(data);
           const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
           if (text) {
-            console.log('[media] Image described (' + text.length + ' chars)');
+            console.log('[media] Image described via Gemini (' + text.length + ' chars)');
             resolve({ success: true, description: text.trim() });
           } else {
-            console.error('[media] Gemini vision response missing text:', data.slice(0, 200));
             resolve({ success: false, error: 'No description in response' });
           }
         } catch (e) {
-          console.error('[media] Gemini vision parse error:', e.message);
           resolve({ success: false, error: 'Failed to parse response' });
         }
       });
     });
-
-    req.on('error', (e) => {
-      console.error('[media] Gemini vision error:', e.message);
-      resolve({ success: false, error: e.message });
-    });
-
+    req.on('error', (e) => resolve({ success: false, error: e.message }));
     req.write(payload);
     req.end();
   });
+}
+
+async function describeImage(base64Data, mimetype, imagePath) {
+  const prompt = 'Classify this image into one category: receipt, payment_confirmation, invoice, company_document, screenshot, photo, meme, other. Then briefly describe what you see including any visible text, amounts, dates, or names. Format: CATEGORY: description';
+
+  // Try local moondream2 first
+  if (imagePath) {
+    const local = describeImageLocal(imagePath, prompt);
+    if (local.success) return local;
+    console.log('[media] Local vision failed, falling back to Gemini');
+  }
+
+  // Fallback to Gemini
+  return describeImageGemini(base64Data, mimetype, prompt);
 }
 
 // --- Helpers ---
@@ -274,7 +300,7 @@ export async function processMedia(parsed) {
 
     if (result.success) {
       return {
-        contentPrefix: '[System: User sent a document "' + result.filename + '". It was automatically uploaded to Paperless-ngx for OCR and storage. Let the user know it was uploaded successfully. They can search for it later using the paperless-tool.]',
+        contentPrefix: '[System: User sent a document "' + result.filename + '". It was automatically uploaded to Paperless-ngx. Let the user know it was uploaded and they can search for it later using paperless-tool.]',
         stripMedia: true,
       };
     } else {
@@ -285,7 +311,7 @@ export async function processMedia(parsed) {
     }
   }
 
-  // --- IMAGE: describe via Gemini vision + offer Paperless upload ---
+  // --- IMAGE: describe via local moondream2 (Gemini fallback) + offer Paperless upload ---
   if (mediaType === 'image') {
     const ext = mimeToExt(mediaMime) || '.jpg';
     const tmpFile = path.join(MEDIA_TMP_DIR, 'img-' + Date.now() + ext);
@@ -293,14 +319,20 @@ export async function processMedia(parsed) {
       fs.writeFileSync(tmpFile, Buffer.from(mediaBase64, 'base64'));
     } catch {}
 
-    // Get AI description of the image
-    const vision = await describeImage(mediaBase64, mediaMime);
+    // Get AI description — local first, Gemini fallback
+    const vision = await describeImage(mediaBase64, mediaMime, tmpFile);
     const description = vision.success ? vision.description : 'Could not analyze image';
 
-    return {
-      contentPrefix: '[System: User sent an image (' + mediaMime + ', ' + sizeKB + ' KB). AI description: "' + description.replace(/"/g, "'").slice(0, 300) + '". The image is saved at ' + tmpFile + '. Respond based on the image context — you can SEE what the image shows via the description above. If it looks like a document/receipt, offer to upload to Paperless: /persist/openfang/scripts/paperless-upload.sh "' + tmpFile + '" "' + (sender || '') + '"]',
-      stripMedia: true,
-    };
+    // Check if it looks like a document/receipt for auto-upload suggestion
+    const isDoc = /receipt|payment|invoice|document|comprovante|recibo|nota fiscal/i.test(description);
+
+    let prefix = '[System: User sent an image (' + mediaMime + ', ' + sizeKB + ' KB). AI analysis: "' + description.replace(/"/g, "'").slice(0, 400) + '". Image saved at ' + tmpFile + '. You can SEE this image via the analysis above — respond based on what it shows.';
+    if (isDoc) {
+      prefix += ' This appears to be a document/receipt. Offer to store it in Paperless: /persist/openfang/scripts/paperless-upload.sh "' + tmpFile + '" "' + (sender || '') + '"';
+    }
+    prefix += ']';
+
+    return { contentPrefix: prefix, stripMedia: true };
   }
 
   // --- AUDIO: transcribe locally via whisper-cpp ---

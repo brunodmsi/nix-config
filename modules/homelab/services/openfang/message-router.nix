@@ -68,7 +68,7 @@ in
       after = [ "openfang.service" "postgresql.service" "openfang-db-init.service" ];
       requires = [ "openfang.service" "postgresql.service" ];
       wantedBy = [ "multi-user.target" ];
-      path = with pkgs; [ bash coreutils curl jq postgresql ffmpeg-headless whisper-cpp ];
+      path = with pkgs; [ bash coreutils curl jq postgresql ffmpeg-headless whisper-cpp llama-cpp ];
       environment = {
         HOME = cfg.configDir;
         ROUTER_PORT = toString routerPort;
@@ -83,6 +83,9 @@ in
         FFMPEG_PATH = "${pkgs.ffmpeg-headless}/bin/ffmpeg";
         WHISPER_PATH = "${pkgs.whisper-cpp}/bin/whisper-cli";
         WHISPER_MODEL = "${cfg.configDir}/models/ggml-base.bin";
+        LLAMA_MTMD_PATH = "${pkgs.llama-cpp}/bin/llama-mtmd-cli";
+        MOONDREAM_REPO = "vikhyatk/moondream2-2025-01-09-gguf";
+        HF_HOME = "${cfg.configDir}/models/hf-cache";
         MEDIA_TMP_DIR = "${cfg.configDir}/media-tmp";
       };
       serviceConfig = {
@@ -91,12 +94,24 @@ in
           mkdir -p ${cfg.configDir}/media-tmp
           mkdir -p ${cfg.configDir}/models
 
+          mkdir -p ${cfg.configDir}/models/hf-cache
+
           # Download whisper model if not present
           if [ ! -f "${cfg.configDir}/models/ggml-base.bin" ]; then
             echo "[router] Downloading whisper base model..."
             ${pkgs.curl}/bin/curl -fsSL -o "${cfg.configDir}/models/ggml-base.bin" \
               "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
             echo "[router] Whisper model downloaded"
+          fi
+
+          # Pre-download moondream2 vision model (llama-mtmd-cli -hf caches to HF_HOME)
+          export HF_HOME="${cfg.configDir}/models/hf-cache"
+          if [ ! -d "${cfg.configDir}/models/hf-cache/models--vikhyatk--moondream2-2025-01-09-gguf" ]; then
+            echo "[router] Pre-downloading moondream2 vision model (first time only)..."
+            timeout 300 ${pkgs.llama-cpp}/bin/llama-mtmd-cli \
+              -hf vikhyatk/moondream2-2025-01-09-gguf \
+              --image /dev/null -p "test" -n 1 2>/dev/null || true
+            echo "[router] Moondream2 model cached"
           fi
         '';
         ExecStart = pkgs.writeShellScript "openfang-router-run" ''
