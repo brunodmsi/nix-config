@@ -41,7 +41,7 @@ let
     # Send context to Fluzy's agent — agent handles WhatsApp delivery async
     RESULT=$(curl -s --max-time 10 -X POST "${routerUrl}/api/agents/$AGENT_ID/message" \
       -H "Content-Type: application/json" \
-      -d "{\"content\": $(echo "$CONTEXT_MSG" | jq -Rs .), \"metadata\": {\"sender\": \"+559184519877\", \"sender_name\": \"System\", \"remote_jid\": \"$REMOTE_JID\"}}")
+      -d "{\"message\": $(echo "$CONTEXT_MSG" | jq -Rs .), \"content\": $(echo "$CONTEXT_MSG" | jq -Rs .), \"metadata\": {\"sender\": \"+559184519877\", \"sender_name\": \"System\", \"remote_jid\": \"$REMOTE_JID\"}}")
 
     if echo "$RESULT" | jq -e '.status' >/dev/null 2>&1; then
       echo "[fluzy-notify] Sent to agent $AGENT_ID — Fluzy will deliver"
