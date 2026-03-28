@@ -24,9 +24,9 @@ let
     # Clean fallback message: strip [SYSTEM] prefix and LLM instructions
     CLEAN_MSG=$(echo "$CONTEXT_MSG" | sed 's/^\[SYSTEM\] //' | sed 's/ Inform the user.*//;s/ Let the user know.*//;s/ Suggest the user.*//')
 
-    # Look up Bruno's agent_id and remote_jid (COALESCE prevents NULL from killing concat)
-    AGENT_ID=$(psql -t -A -c "SELECT COALESCE(agent_id, '''') FROM channel_users WHERE channel_user_id LIKE '%559184519877%' LIMIT 1;" "${dbUrl}" 2>/dev/null)
-    REMOTE_JID=$(psql -t -A -c "SELECT COALESCE(remote_jid, '''') FROM channel_users WHERE channel_user_id LIKE '%559184519877%' LIMIT 1;" "${dbUrl}" 2>/dev/null)
+    # Look up Bruno's agent_id and remote_jid
+    AGENT_ID=$(psql -t -A -c "SELECT agent_id FROM channel_users WHERE channel_user_id LIKE '%559184519877%' AND agent_id IS NOT NULL LIMIT 1;" "${dbUrl}" 2>/dev/null)
+    REMOTE_JID=$(psql -t -A -c "SELECT remote_jid FROM channel_users WHERE channel_user_id LIKE '%559184519877%' LIMIT 1;" "${dbUrl}" 2>/dev/null)
     TO="''${REMOTE_JID:-+559184519877}"
 
     # Fallback to clean direct send if no agent spawned yet
