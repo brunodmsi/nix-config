@@ -137,8 +137,6 @@ add_feed "$CID" "https://www.eff.org/rss/updates.xml"
 echo ">> Football"
 CID=$(create_category "Football")
 add_feed "$CID" "https://www.netflu.com.br/feed/"
-add_feed "$CID" "https://www.reddit.com/r/futebol/.rss"
-add_feed "$CID" "https://www.reddit.com/r/nense/.rss"
 add_feed "$CID" "https://trivela.com.br/feed/"
 
 echo ""
