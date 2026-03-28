@@ -53,6 +53,10 @@ in
       };
     };
 
+    services.postgresql.authentication = lib.mkBefore ''
+      host miniflux miniflux 127.0.0.1/32 trust
+    '';
+
     services.caddy.virtualHosts."http://${cfg.url}" = {
       extraConfig = ''
         reverse_proxy http://${addr}:${toString port}
