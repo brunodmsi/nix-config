@@ -103,6 +103,8 @@ in
 
     services.caddy.virtualHosts."http://${cfg.url}" = {
       extraConfig = ''
+        # Prevent Cloudflare from caching login/CSRF pages
+        header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate"
         reverse_proxy http://127.0.0.1:8009 {
           header_up X-Forwarded-Proto "https"
           header_up X-Forwarded-Port "443"
