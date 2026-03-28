@@ -177,19 +177,22 @@ Score guide: 9-10 production-ready, 7-8 good with minor issues, 5-6 functional b
       --dangerously-skip-permissions \
       --model ${cfg.model} \
       --max-turns ${toString cfg.maxTurns} \
-      --system-prompt-file "$PROMPT_FILE" \
+      --append-system-prompt "$(cat "$PROMPT_FILE")" \
       --output-format stream-json \
       --verbose \
-      2>&1 | while IFS= read -r line; do
-        # Log tool use events for visibility
-        TYPE=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
-        if [ "$TYPE" = "assistant" ]; then
-          TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
-          [ -n "$TOOL" ] && echo "[agent] $(date '+%H:%M:%S') Using tool: $TOOL"
-        elif [ "$TYPE" = "result" ]; then
-          echo "$line" > "$TASK_DIR/claude-result.json"
-          echo "[agent] $(date '+%H:%M:%S') Claude finished ($(echo "$line" | jq -r '.duration_ms // 0' 2>/dev/null)ms, $(echo "$line" | jq -r '.num_turns // 0' 2>/dev/null) turns)"
-        fi
+      --bare \
+      2>&1 | tee "$TASK_DIR/claude-stream.log" | while IFS= read -r line; do
+        # Fast type check without jq
+        case "$line" in
+          *'"type":"assistant"'*)
+            TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
+            [ -n "$TOOL" ] && echo "[agent] $(date '+%H:%M:%S') -> $TOOL"
+            ;;
+          *'"type":"result"'*)
+            echo "$line" > "$TASK_DIR/claude-result.json"
+            echo "[agent] $(date '+%H:%M:%S') Done ($(echo "$line" | jq -r '.num_turns // "?"' 2>/dev/null) turns, $(echo "$line" | jq -r '(.duration_ms // 0) / 1000 | floor' 2>/dev/null)s)"
+            ;;
+        esac
       done || true
 
     # Parse result
@@ -221,18 +224,21 @@ Review all your changes, fix the issues, improve the code quality, and re-score.
         --dangerously-skip-permissions \
         --model ${cfg.model} \
         --max-turns $((${toString cfg.maxTurns} / 2)) \
-        --system-prompt-file "$PROMPT_FILE" \
+        --append-system-prompt "$(cat "$PROMPT_FILE")" \
         --output-format stream-json \
         --verbose \
-        2>&1 | while IFS= read -r line; do
-          TYPE=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
-          if [ "$TYPE" = "assistant" ]; then
-            TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
-            [ -n "$TOOL" ] && echo "[agent] $(date '+%H:%M:%S') Using tool: $TOOL"
-          elif [ "$TYPE" = "result" ]; then
-            echo "$line" > "$TASK_DIR/claude-result.json"
-            echo "[agent] $(date '+%H:%M:%S') Claude finished ($(echo "$line" | jq -r '.duration_ms // 0' 2>/dev/null)ms)"
-          fi
+        --bare \
+        2>&1 | tee -a "$TASK_DIR/claude-stream.log" | while IFS= read -r line; do
+          case "$line" in
+            *'"type":"assistant"'*)
+              TOOL=$(echo "$line" | jq -r '.message.content[]? | select(.type=="tool_use") | .name // empty' 2>/dev/null)
+              [ -n "$TOOL" ] && echo "[agent] $(date '+%H:%M:%S') -> $TOOL"
+              ;;
+            *'"type":"result"'*)
+              echo "$line" > "$TASK_DIR/claude-result.json"
+              echo "[agent] $(date '+%H:%M:%S') Done ($(echo "$line" | jq -r '.num_turns // "?"' 2>/dev/null) turns, $(echo "$line" | jq -r '(.duration_ms // 0) / 1000 | floor' 2>/dev/null)s)"
+              ;;
+          esac
         done || true
 
       if [ -f ".agent-result.json" ]; then
@@ -597,7 +603,7 @@ in
     };
     maxTurns = lib.mkOption {
       type = lib.types.int;
-      default = 50;
+      default = 30;
     };
     maxConcurrent = lib.mkOption {
       type = lib.types.int;

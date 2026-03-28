@@ -289,7 +289,7 @@
         model = "opus";
         scoreThreshold = 7;
         maxIterations = 3;
-        maxTurns = 50;
+        maxTurns = 30;
         maxConcurrent = 3;
       };
       # Monitoring
