@@ -64,6 +64,7 @@ let
       git config user.name "Coding Agent"
       git config user.email "agent@demasi.dev"
       git remote set-url origin "https://github.com/$REPO.git"
+      chown -R ${cfg.user}:users "$REPO_DIR" 2>/dev/null || true
 
       # Initialize wt config for this project
       cd "$REPO_DIR"
@@ -80,6 +81,9 @@ let
     WORKTREE_DIR="$TASK_DIR/worktree"
     mkdir -p "$TASK_DIR"
     git worktree add "$WORKTREE_DIR" -b "$BRANCH" "origin/$BASE_BRANCH" 2>&1
+
+    # Ensure bmasi owns everything (run script may be called by root via Fluzy)
+    chown -R ${cfg.user}:users "$TASK_DIR" 2>/dev/null || true
 
     # Write task.json
     ${pkgs.jq}/bin/jq -n \
