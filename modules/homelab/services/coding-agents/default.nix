@@ -799,6 +799,8 @@ in
         Type = "oneshot";
         TimeoutStartSec = "30min";
         User = cfg.user;
+        # Fix log file ownership — systemd creates it as root before dropping to User
+        ExecStartPre = "+${pkgs.coreutils}/bin/chown ${cfg.user}:users ${cfg.workspaceDir}/tasks/%i/agent.log";
         ExecStart = "${workerScript} %i";
         StandardOutput = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
         StandardError = "append:${cfg.workspaceDir}/tasks/%i/agent.log";
