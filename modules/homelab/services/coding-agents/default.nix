@@ -555,7 +555,7 @@ in
     };
     model = lib.mkOption {
       type = lib.types.str;
-      default = "sonnet";
+      default = "opus";
     };
     scoreThreshold = lib.mkOption {
       type = lib.types.int;

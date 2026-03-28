@@ -281,7 +281,7 @@
       coding-agents = {
         enable = true;
         githubTokenFile = config.age.secrets.githubToken.path;
-        model = "sonnet";
+        model = "opus";
         scoreThreshold = 7;
         maxIterations = 3;
         maxTurns = 50;
