@@ -62,7 +62,7 @@ echo ""
 # --- World News ---
 echo ">> World News"
 CID=$(create_category "World News")
-add_feed "$CID" "https://feeds.apnews.com/rss/apf-topnews"
+add_feed "$CID" "https://apnews.com/world-news.rss"
 add_feed "$CID" "https://feeds.bbci.co.uk/news/world/rss.xml"
 add_feed "$CID" "https://theconversation.com/global/articles.atom"
 add_feed "$CID" "https://www.theguardian.com/world/rss"
@@ -71,8 +71,8 @@ add_feed "$CID" "https://www.theguardian.com/world/rss"
 echo ">> PT-BR News"
 CID=$(create_category "PT-BR News")
 add_feed "$CID" "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
-add_feed "$CID" "https://www.brasildefato.com.br/rss2.xml"
-add_feed "$CID" "https://brazilian.report/feed/"
+add_feed "$CID" "https://www.brasildefato.com.br/feed"
+add_feed "$CID" "https://rss.beehiiv.com/feeds/EPWB5hzRfW.xml"
 
 # --- Tech / SWE ---
 echo ">> Tech / SWE"
@@ -106,7 +106,7 @@ add_feed "$CID" "https://lilianweng.github.io/index.xml"
 # --- Startups / Business ---
 echo ">> Startups / Business"
 CID=$(create_category "Startups / Business")
-add_feed "$CID" "https://paulgraham.com/rss.html"
+add_feed "$CID" "https://program247365.github.io/paulgraham-rss/rss.xml"
 add_feed "$CID" "https://stratechery.com/feed/"
 add_feed "$CID" "https://www.lennysnewsletter.com/feed"
 add_feed "$CID" "https://saastr.com/feed/"
@@ -115,7 +115,7 @@ add_feed "$CID" "https://saastr.com/feed/"
 echo ">> Finance / Markets"
 CID=$(create_category "Finance / Markets")
 add_feed "$CID" "https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine.rss"
-add_feed "$CID" "https://feeds.feedburner.com/CafeComEconomia"
+add_feed "$CID" "https://www.infomoney.com.br/feed/"
 
 # --- Science / Space ---
 echo ">> Science / Space"
@@ -136,7 +136,7 @@ add_feed "$CID" "https://www.eff.org/rss/updates.xml"
 # --- Football ---
 echo ">> Football"
 CID=$(create_category "Football")
-add_feed "$CID" "https://ge.globo.com/rss/futebol/times/fluminense/"
+add_feed "$CID" "https://www.netflu.com.br/feed/"
 add_feed "$CID" "https://www.reddit.com/r/futebol/.rss"
 add_feed "$CID" "https://www.reddit.com/r/nense/.rss"
 add_feed "$CID" "https://trivela.com.br/feed/"
