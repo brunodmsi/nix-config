@@ -71,6 +71,13 @@ in
           ];
           scrape_interval = "15s";
         }
+        {
+          job_name = "apcupsd";
+          static_configs = [
+            { targets = [ "localhost:9162" ]; }
+          ];
+          scrape_interval = "30s";
+        }
       ];
     };
 

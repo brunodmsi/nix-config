@@ -127,6 +127,11 @@
           shell_exec: /persist/openfang/scripts/server-tool.sh COMMAND [ARG]
           Commands: errors [1h|6h|24h], service NAME, failed, storage, zpool, snapraid, snapraid-diff, auth [1h|6h|24h], backup, tunnel
 
+          ## UPS (APC BX1500BI-BR)
+          shell_exec: apcaccess
+          Shows UPS status: battery %, load, runtime, line voltage, status (ONLINE/ONBATT).
+          Use this when the user asks about power, UPS, or battery status.
+
           NOTE: snapraid sync and zpool scrub run automatically on schedule. Do NOT trigger them manually.
 
           ## Media (Jellyfin)
@@ -303,6 +308,50 @@
         configFile = config.age.secrets.mullvadWireguard.path;
       };
     };
+  };
+
+  # APC UPS (BX1500BI-BR) — auto-shutdown on low battery, Fluzy notifications
+  services.apcupsd = {
+    enable = true;
+    configText = ''
+      UPSCABLE usb
+      UPSTYPE usb
+      DEVICE
+      POLLTIME 15
+      ONBATTERYDELAY 10
+      BATTERYLEVEL 15
+      MINUTES 5
+      TIMEOUT 0
+      ANNOY 60
+      ANNOYDELAY 30
+      NOLOGON disable
+      KILLDELAY 0
+      NETSERVER on
+      NISIP 127.0.0.1
+      NISPORT 3551
+      UPSCLASS standalone
+      UPSMODE disable
+    '';
+    hooks = {
+      onbattery = ''
+        RUNTIME=$(/run/current-system/sw/bin/apcaccess -u | grep TIMELEFT | awk '{print $3}')
+        BATT=$(/run/current-system/sw/bin/apcaccess -u | grep BCHARGE | awk '{print $3}')
+        /persist/openfang/scripts/fluzy-notify.sh "[SYSTEM] Power outage detected. Server running on UPS battery. Battery: ''${BATT:-?}%, estimated runtime: ''${RUNTIME:-?} minutes. Server will shut down safely at 15% battery. Inform the user."
+      '';
+      offbattery = ''
+        /persist/openfang/scripts/fluzy-notify.sh "[SYSTEM] Power restored. Server back on mains power, UPS recharging. Inform the user."
+      '';
+      doshutdown = ''
+        /persist/openfang/scripts/fluzy-notify.sh "[SYSTEM] UPS battery critically low. Server shutting down NOW to protect data. Will power back on when mains returns (BIOS AC restore). Inform the user urgently."
+      '';
+    };
+  };
+
+  # Prometheus exporter for UPS metrics
+  services.prometheus.exporters.apcupsd = {
+    enable = true;
+    port = 9162;
+    listenAddress = "127.0.0.1";
   };
 
   # Cloudflare Tunnel — token-based, routes managed in dashboard
