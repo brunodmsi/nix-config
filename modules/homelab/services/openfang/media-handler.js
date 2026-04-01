@@ -25,6 +25,194 @@ const HF_HOME = process.env.HF_HOME || '/persist/openfang/models/hf-cache';
 // Ensure tmp dir exists
 try { fs.mkdirSync(MEDIA_TMP_DIR, { recursive: true }); } catch {}
 
+// --- Paperless post-processing: wait for extraction, classify, tag ---
+
+function paperlessGet(apiPath) {
+  return new Promise((resolve) => {
+    const url = new URL(PAPERLESS_API_URL + apiPath);
+    const transport = url.protocol === 'https:' ? https : http;
+
+    const req = transport.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers: {
+        'Authorization': 'Token ' + PAPERLESS_API_TOKEN,
+        'Accept': 'application/json',
+      },
+      timeout: 15000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve({ error: 'Parse error', raw: data }); }
+      });
+    });
+    req.on('error', (e) => resolve({ error: e.message }));
+    req.end();
+  });
+}
+
+function paperlessPatch(apiPath, body) {
+  return new Promise((resolve) => {
+    const url = new URL(PAPERLESS_API_URL + apiPath);
+    const transport = url.protocol === 'https:' ? https : http;
+    const payload = JSON.stringify(body);
+
+    const req = transport.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method: 'PATCH',
+      headers: {
+        'Authorization': 'Token ' + PAPERLESS_API_TOKEN,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout: 15000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve({ error: 'Parse error', raw: data }); }
+      });
+    });
+    req.on('error', (e) => resolve({ error: e.message }));
+    req.write(payload);
+    req.end();
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function waitForTask(taskId, maxWaitMs = 120000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    const task = await paperlessGet('/api/tasks/?task_id=' + taskId);
+    // tasks endpoint returns an array
+    const t = Array.isArray(task) ? task[0] : task;
+    if (t && t.status === 'SUCCESS' && t.related_document) {
+      console.log('[media] Task ' + taskId + ' completed → document ' + t.related_document);
+      return t.related_document;
+    }
+    if (t && (t.status === 'FAILURE' || t.status === 'REVOKED')) {
+      console.error('[media] Task ' + taskId + ' failed: ' + (t.result || t.status));
+      return null;
+    }
+    await sleep(3000);
+  }
+  console.error('[media] Task ' + taskId + ' timed out after ' + maxWaitMs + 'ms');
+  return null;
+}
+
+function classifyWithGemini(content, tags) {
+  return new Promise((resolve) => {
+    if (!GEMINI_API_KEY || tags.length === 0) { resolve([]); return; }
+
+    const tagList = tags.map(t => `${t.id}: ${t.name}`).join('\n');
+    const contentPreview = content.slice(0, 2000);
+    const prompt = `You are a document classifier for a Brazilian personal/business document archive. Given the extracted text of a document and a list of available tags, return the IDs of ALL tags that apply.
+
+Available tags (id: name):
+${tagList}
+
+Document content:
+${contentPreview}
+
+Rules:
+- Return ONLY a JSON array of tag IDs, e.g. [1, 3]
+- If a child tag applies, also include its parent tag (e.g. if NFSe applies, also include CNPJ)
+- If no tags match, return []
+- Do NOT explain, just return the JSON array`;
+
+    const payload = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 50 }
+    });
+
+    const req = https.request({
+      hostname: 'generativelanguage.googleapis.com',
+      path: '/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_API_KEY,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout: 15000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const match = text.match(/\[[\d\s,]*\]/);
+          if (match) {
+            const ids = JSON.parse(match[0]);
+            const validIds = ids.filter(id => tags.some(t => t.id === id));
+            console.log('[media] Gemini classified tags: ' + JSON.stringify(validIds));
+            resolve(validIds);
+          } else {
+            console.log('[media] Gemini returned no parseable tags: ' + text);
+            resolve([]);
+          }
+        } catch { resolve([]); }
+      });
+    });
+    req.on('error', () => resolve([]));
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function classifyAndTagDocument(taskId) {
+  if (!taskId) return;
+  console.log('[media] Waiting for Paperless to process task ' + taskId + '...');
+
+  // Step 1: Wait for Paperless to finish processing (OCR, text extraction)
+  const docId = await waitForTask(taskId);
+  if (!docId) return;
+
+  // Step 2: Fetch document content and available tags in parallel
+  const [doc, tagsData] = await Promise.all([
+    paperlessGet('/api/documents/' + docId + '/'),
+    paperlessGet('/api/tags/?page_size=100'),
+  ]);
+
+  if (doc.error || !doc.content) {
+    console.error('[media] Could not fetch document ' + docId + ': ' + (doc.error || 'no content'));
+    return;
+  }
+
+  const tags = (tagsData.results || []).map(t => ({ id: t.id, name: t.name }));
+  if (tags.length === 0) {
+    console.log('[media] No tags configured in Paperless, skipping classification');
+    return;
+  }
+
+  // Step 3: Classify using Gemini with the actual extracted content
+  const tagIds = await classifyWithGemini(doc.content, tags);
+  if (tagIds.length === 0) {
+    console.log('[media] No tags matched for document ' + docId);
+    return;
+  }
+
+  // Step 4: Merge with any existing tags and PATCH the document
+  const existingTags = doc.tags || [];
+  const mergedTags = [...new Set([...existingTags, ...tagIds])];
+
+  const result = await paperlessPatch('/api/documents/' + docId + '/', { tags: mergedTags });
+  const tagNames = tagIds.map(id => { const t = tags.find(t => t.id === id); return t ? t.name : id; });
+  if (result.error) {
+    console.error('[media] Failed to tag document ' + docId + ': ' + result.error);
+  } else {
+    console.log('[media] Tagged document ' + docId + ' with: ' + tagNames.join(', '));
+  }
+}
+
 // --- Paperless upload ---
 
 function uploadToPaperless(base64Data, mimetype, filename, sender) {
@@ -76,7 +264,10 @@ function uploadToPaperless(base64Data, mimetype, filename, sender) {
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           console.log('[media] Uploaded to Paperless: ' + safeName + ' (status ' + res.statusCode + ')');
-          resolve({ success: true, filename: safeName, response: data });
+          // post_document returns a task ID like "abc-123-def"
+          let taskId = null;
+          try { taskId = JSON.parse(data); } catch { taskId = data.replace(/['"]/g, '').trim(); }
+          resolve({ success: true, filename: safeName, taskId });
         } else {
           console.error('[media] Paperless upload failed: ' + res.statusCode + ' ' + data);
           resolve({ success: false, error: 'HTTP ' + res.statusCode, filename: safeName });
@@ -299,8 +490,12 @@ export async function processMedia(parsed) {
     const result = await uploadToPaperless(mediaBase64, mediaMime, mediaFilename, sender);
 
     if (result.success) {
+      // Classify and tag in background after Paperless processes the document
+      classifyAndTagDocument(result.taskId).catch(e =>
+        console.error('[media] Background tagging failed:', e.message)
+      );
       return {
-        contentPrefix: '[System: User sent a document "' + result.filename + '". It was automatically uploaded to Paperless-ngx. Let the user know it was uploaded and they can search for it later using paperless-tool.]',
+        contentPrefix: '[System: User sent a document "' + result.filename + '". It was automatically uploaded to Paperless-ngx and will be auto-tagged after processing. Let the user know it was uploaded and they can search for it later using paperless-tool.]',
         stripMedia: true,
       };
     } else {
