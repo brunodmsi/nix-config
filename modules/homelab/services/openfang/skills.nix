@@ -492,6 +492,7 @@ let
   # --- homelab-paperless skill (Phase 4) ---
   plCfg = cfg.paperless;
   paperlessApiUrl = "http://127.0.0.1:${toString plCfg.port}";
+  paperlessPublicUrl = "https://${config.homelab.services.paperless.url}";
 
   paperlessSkillToml = pkgs.writeText "homelab-paperless-skill.toml" ''
     [skill]
@@ -536,6 +537,7 @@ let
     import urllib.parse
 
     API_URL = "${paperlessApiUrl}/api"
+    PUBLIC_URL = "${paperlessPublicUrl}"
     API_KEY_FILE = "${plCfg.apiKeyFile}"
     _override_token = None
 
@@ -573,6 +575,7 @@ let
         created = (doc.get("created") or "")[:10]
         correspondent = doc.get("correspondent_name") or doc.get("correspondent") or ""
         tags = ", ".join(doc.get("tag_names", []) or [str(t) for t in doc.get("tags", [])])
+        link = f"{PUBLIC_URL}/documents/{doc_id}/details"
         line = f"- [{doc_id}] {title}"
         if created:
             line += f" ({created})"
@@ -580,6 +583,7 @@ let
             line += f" — {correspondent}"
         if tags:
             line += f" [{tags}]"
+        line += f"\n  {link}"
         return line
 
 
@@ -652,6 +656,9 @@ let
         tags = ", ".join(data.get("tag_names", [])) or "None"
         content = (data.get("content") or "")[:500]
 
+        view_link = f"{PUBLIC_URL}/documents/{doc_id}/details"
+        download_link = f"{PUBLIC_URL}/api/documents/{doc_id}/download/"
+
         return (
             f"*{title}*\n"
             f"ID: {doc_id}\n"
@@ -659,6 +666,8 @@ let
             f"Correspondent: {correspondent}\n"
             f"Type: {doc_type}\n"
             f"Tags: {tags}\n"
+            f"\nView: {view_link}\n"
+            f"Download: {download_link}\n"
             f"\nContent preview:\n{content}"
         )
 
